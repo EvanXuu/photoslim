@@ -6,6 +6,7 @@ struct ReviewView: View {
   @EnvironmentObject private var model: AppModel
   @State private var confirmsRollback = false
   @State private var selectedItem: TaskItemRecord?
+  @State private var hoveredItemID: UUID?
   @State private var keyboardComparing = false
 
   var body: some View {
@@ -33,12 +34,15 @@ struct ReviewView: View {
     } message: {
       Text("本地压缩结果会被清理；如果旧版本已经写入过副本，则该副本会移到“最近删除”。原件保持不动。")
     }
+    .sheet(item: $selectedItem) { item in
+      ReviewDetailView(item: item)
+        .environmentObject(model)
+    }
     .background(
-      BeforeAfterKeyMonitor { pressed in
-        if selectedItem == nil {
-          selectedItem = model.currentSession?.verifiedItems.first
-        }
-        keyboardComparing = pressed
+      BeforeAfterKeyMonitor(isEnabled: { selectedItem == nil }) { pressed in
+        // The grid shortcut is scoped to the card under the pointer. Do not
+        // silently choose the first item when the pointer is elsewhere.
+        keyboardComparing = pressed && hoveredItemID != nil
       }
     )
   }
@@ -150,7 +154,14 @@ struct ReviewView: View {
           ForEach(items) { item in
             ReviewPreviewCard(
               item: item,
-              keyboardComparing: keyboardComparing && selectedItem?.id == item.id
+              keyboardComparing: keyboardComparing && hoveredItemID == item.id,
+              onHoverChanged: { isHovering in
+                if isHovering {
+                  hoveredItemID = item.id
+                } else if hoveredItemID == item.id {
+                  hoveredItemID = nil
+                }
+              }
             ) {
               selectedItem = item
             }
@@ -258,6 +269,7 @@ private struct ReviewPreviewCard: View {
   @EnvironmentObject private var model: AppModel
   let item: TaskItemRecord
   let keyboardComparing: Bool
+  let onHoverChanged: (Bool) -> Void
   let onSelect: () -> Void
   @State private var outputImage: NSImage?
   @State private var originalImage: NSImage?
@@ -328,6 +340,7 @@ private struct ReviewPreviewCard: View {
       RoundedRectangle(cornerRadius: PhotoSlimTheme.cardRadius, style: .continuous)
         .stroke(PhotoSlimTheme.hairline)
     }
+    .onHover(perform: onHoverChanged)
     .task(id: item.id) {
       outputImage = await ReviewPreviewRenderer.image(
         at: model.reviewOutputURL(for: item),
@@ -354,7 +367,7 @@ private struct ReviewDetailView: View {
         VStack(alignment: .leading, spacing: 3) {
           Text(item.source.displayTitle)
             .font(.system(size: 17, weight: .semibold))
-          Text("点击关闭；按住“查看原图”或键盘 \\ 对比")
+          Text("按住“查看原图”或键盘 \\ 对比；可缩放和平移结果")
             .font(.system(size: 11))
             .foregroundStyle(.secondary)
         }
@@ -372,19 +385,18 @@ private struct ReviewDetailView: View {
           perform: {}
         )
       }
-      ReviewPreviewImage(
+      ZoomableReviewPreview(
         image: comparing ? originalImage : outputImage,
         kind: item.source.kind,
         isOriginal: comparing
       )
       .frame(minWidth: 560, minHeight: 420)
-      .insetPanel()
     }
     .padding(24)
     .frame(minWidth: 640, minHeight: 520)
     .background(PhotoSlimTheme.canvas)
     .background(
-      BeforeAfterKeyMonitor { pressed in
+      BeforeAfterKeyMonitor(isEnabled: { true }) { pressed in
         comparing = pressed
       }
     )
@@ -435,6 +447,115 @@ private struct ReviewPreviewImage: View {
   }
 }
 
+private struct ZoomableReviewPreview: View {
+  let image: NSImage?
+  let kind: MediaKind
+  let isOriginal: Bool
+
+  @State private var zoom: CGFloat = 1
+  @State private var magnification = CGFloat(1)
+  @State private var panOffset = CGSize.zero
+  @State private var transientPan = CGSize.zero
+
+  private var effectiveZoom: CGFloat {
+    min(max(zoom * magnification, 1), 5)
+  }
+
+  var body: some View {
+    VStack(spacing: 8) {
+      HStack(spacing: 8) {
+        Label(isOriginal ? "原图" : "压缩结果", systemImage: isOriginal ? "photo" : "arrow.down.right.circle")
+          .font(.system(size: 10, weight: .medium))
+          .foregroundStyle(.secondary)
+        Spacer()
+        Button {
+          adjustZoom(by: -0.25)
+        } label: {
+          Image(systemName: "minus")
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .accessibilityLabel("缩小")
+        .disabled(zoom <= 1)
+        Text("\(Int(zoom * 100))%")
+          .font(.system(size: 10, design: .monospaced))
+          .frame(width: 48)
+          .foregroundStyle(.secondary)
+        Button {
+          adjustZoom(by: 0.25)
+        } label: {
+          Image(systemName: "plus")
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .accessibilityLabel("放大")
+        .disabled(zoom >= 5)
+        Button("适合窗口") {
+          resetZoom()
+        }
+        .buttonStyle(.borderless)
+        .controlSize(.small)
+      }
+
+      GeometryReader { proxy in
+        ZStack {
+          ReviewPreviewImage(image: image, kind: kind, isOriginal: isOriginal)
+            .frame(width: proxy.size.width, height: proxy.size.height)
+            .scaleEffect(effectiveZoom)
+            .offset(
+              x: panOffset.width + transientPan.width,
+              y: panOffset.height + transientPan.height
+            )
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipped()
+        .contentShape(Rectangle())
+        .simultaneousGesture(
+          MagnificationGesture()
+            .onChanged { value in magnification = value }
+            .onEnded { value in
+              zoom = min(max(zoom * value, 1), 5)
+              magnification = 1
+              if zoom == 1 { panOffset = .zero }
+            }
+        )
+        .simultaneousGesture(
+          DragGesture(minimumDistance: 1)
+            .onChanged { value in transientPan = value.translation }
+            .onEnded { value in
+              guard zoom > 1 else {
+                transientPan = .zero
+                return
+              }
+              panOffset.width += value.translation.width
+              panOffset.height += value.translation.height
+              transientPan = .zero
+            }
+        )
+      }
+      .frame(minHeight: 360)
+      Text("拖动平移 · 捏合或按钮缩放")
+        .font(.system(size: 10))
+        .foregroundStyle(.tertiary)
+    }
+    .padding(10)
+    .background(PhotoSlimTheme.raisedSurface)
+    .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+  }
+
+  private func adjustZoom(by delta: CGFloat) {
+    zoom = min(max(zoom + delta, 1), 5)
+    if zoom == 1 { panOffset = .zero }
+  }
+
+  private func resetZoom() {
+    zoom = 1
+    magnification = 1
+    panOffset = .zero
+    transientPan = .zero
+  }
+}
+
 private enum ReviewPreviewRenderer {
   static func image(at url: URL?, kind: MediaKind) async -> NSImage? {
     guard let url else { return nil }
@@ -458,10 +579,16 @@ private enum ReviewPreviewRenderer {
 }
 
 private struct BeforeAfterKeyMonitor: NSViewRepresentable {
+  let isEnabled: () -> Bool
   let onChanged: (Bool) -> Void
 
+  init(isEnabled: @escaping () -> Bool = { true }, onChanged: @escaping (Bool) -> Void) {
+    self.isEnabled = isEnabled
+    self.onChanged = onChanged
+  }
+
   func makeCoordinator() -> Coordinator {
-    Coordinator(onChanged: onChanged)
+    Coordinator(isEnabled: isEnabled, onChanged: onChanged)
   }
 
   func makeNSView(context: Context) -> NSView {
@@ -470,17 +597,26 @@ private struct BeforeAfterKeyMonitor: NSViewRepresentable {
     return view
   }
 
-  func updateNSView(_ nsView: NSView, context: Context) {}
+  func updateNSView(_ nsView: NSView, context: Context) {
+    context.coordinator.update(isEnabled: isEnabled, onChanged: onChanged)
+  }
 
   static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
     coordinator.stop()
   }
 
   final class Coordinator {
-    private let onChanged: (Bool) -> Void
+    private var isEnabled: () -> Bool
+    private var onChanged: (Bool) -> Void
     private var monitor: Any?
 
-    init(onChanged: @escaping (Bool) -> Void) {
+    init(isEnabled: @escaping () -> Bool, onChanged: @escaping (Bool) -> Void) {
+      self.isEnabled = isEnabled
+      self.onChanged = onChanged
+    }
+
+    func update(isEnabled: @escaping () -> Bool, onChanged: @escaping (Bool) -> Void) {
+      self.isEnabled = isEnabled
       self.onChanged = onChanged
     }
 
@@ -488,9 +624,15 @@ private struct BeforeAfterKeyMonitor: NSViewRepresentable {
       guard monitor == nil else { return }
       monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) {
         [weak self] event in
-        guard event.charactersIgnoringModifiers == "\\" else { return event }
+        guard event.keyCode == 42 || event.charactersIgnoringModifiers == "\\" else { return event }
+        guard self?.isEnabled() == true else { return event }
+        if event.type == .keyDown && event.isARepeat {
+          return nil
+        }
         self?.onChanged(event.type == .keyDown)
-        return event
+        // Consume the handled shortcut. Passing it on makes AppKit beep when
+        // no text control is focused, and may trigger an unrelated command.
+        return nil
       }
     }
 
