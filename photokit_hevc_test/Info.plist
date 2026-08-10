@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>PhotoKit HEVC Test</string>
+	<key>CFBundleExecutable</key>
+	<string>PhotoKitHEVCTest</string>
+	<key>CFBundleIdentifier</key>
+	<string>local.codex.PhotoKitHEVCTest.v3</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>PhotoKitHEVCTest</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleSignature</key>
+	<string>????</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>26.0</string>
+	<key>LSUIElement</key>
+	<false/>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Used to find one old non-HEVC video and create a local HEVC test copy. The Photos library is not modified.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Used only if you later choose to save a converted test copy to Photos.</string>
+</dict>
+</plist>

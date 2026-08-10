@@ -1,0 +1,22 @@
+# macOS metadata
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Swift Package Manager and Xcode state
+.build/
+.swiftpm/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+
+# Generated application bundles and distribution archives
+**/build/
+**/build-*/
+**/*.app/
+**/*.app.zip
+
+# Local IDE and tool caches
+.idea/
+.vscode/
+.codex/

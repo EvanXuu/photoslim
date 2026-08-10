@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleDisplayName</key>
+  <string>PhotoKit HEVC Test v4</string>
+  <key>CFBundleExecutable</key>
+  <string>PhotoKitHEVCTestV4</string>
+  <key>CFBundleIdentifier</key>
+  <string>local.codex.PhotoKitHEVCTest.v4</string>
+  <key>CFBundleName</key>
+  <string>PhotoKitHEVCTestV4</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleSignature</key>
+  <string>????</string>
+  <key>CFBundleShortVersionString</key>
+  <string>1.0</string>
+  <key>CFBundleVersion</key>
+  <string>1</string>
+  <key>LSMinimumSystemVersion</key>
+  <string>26.0</string>
+  <key>NSPhotoLibraryUsageDescription</key>
+  <string>Used to find one favorite non-HEVC video, create an HEVC replacement, and move the original to Recently Deleted after validation.</string>
+  <key>NSPhotoLibraryAddUsageDescription</key>
+  <string>Used to create the HEVC replacement in Photos after its metadata has been validated.</string>
+  <key>NSPrincipalClass</key>
+  <string>NSApplication</string>
+</dict>
+</plist>
