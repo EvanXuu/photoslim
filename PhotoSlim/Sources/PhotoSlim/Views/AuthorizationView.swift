@@ -19,7 +19,7 @@ struct AuthorizationView: View {
         Text("安全整理你的照片图库")
           .font(.system(size: 26, weight: .semibold))
           .foregroundStyle(PhotoSlimTheme.ink)
-        Text("PhotoSlim 只使用公开 PhotoKit 接口。压缩副本通过验证后，\n原件仍会保留，直到你亲自确认。")
+        Text("PhotoSlim 只在本机处理照片。压缩结果检查无误后，\n原件仍会保留，直到你亲自确认。")
           .font(.system(size: 14))
           .foregroundStyle(.secondary)
           .multilineTextAlignment(.center)

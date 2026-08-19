@@ -32,7 +32,7 @@ struct ReviewView: View {
       Button("取消", role: .cancel) {}
       Button("撤回压缩副本", role: .destructive) { model.rollbackCompressedCopies() }
     } message: {
-      Text("本地压缩结果会被清理；如果旧版本已经写入过副本，则该副本会移到“最近删除”。原件保持不动。")
+      Text("本次生成的结果会被清理；原件保持不动。")
     }
     .sheet(item: $selectedItem) { item in
       ReviewDetailView(item: item)
@@ -58,9 +58,9 @@ struct ReviewView: View {
           .foregroundStyle(PhotoSlimTheme.signal)
       }
       VStack(alignment: .leading, spacing: 4) {
-        Text("压缩副本已准备好")
+        Text("压缩结果已准备好")
           .font(.system(size: 24, weight: .semibold))
-        Text("压缩结果先留在本机预览目录。检查无误后才会写入相册；原件目前仍在照片图库中。")
+        Text("压缩结果暂时保存在本机。确认无误后才会写入相册；原件目前安全保留。")
           .font(.system(size: 12))
           .foregroundStyle(.secondary)
       }
@@ -76,7 +76,7 @@ struct ReviewView: View {
   private func summaryPanel(_ session: CompressionSession) -> some View {
     HStack(spacing: 0) {
       summaryMetric(
-        "已验证副本",
+        "待写入结果",
         "\(session.verifiedItems.count)",
         symbol: "checkmark.seal")
       Divider().frame(height: 46)
@@ -117,7 +117,7 @@ struct ReviewView: View {
         instruction("2", "按住“查看原图”或键盘 \\，比较清晰度、颜色和画面。")
         instruction("3", "确认无误后写入相册，系统会直接确认删除原件。")
       }
-      Label("拍摄日期、位置、收藏和普通相簿关系会在写入时复制并验证；添加日期和资产 ID 会变化。", systemImage: "info.circle")
+      Label("拍摄日期、位置、收藏和相簿信息会尽量保留；原件的添加时间可能变化。", systemImage: "info.circle")
         .font(.system(size: 10))
         .foregroundStyle(.secondary)
         .padding(.top, 2)
@@ -131,7 +131,7 @@ struct ReviewView: View {
     let items = session.verifiedItems
     return VStack(alignment: .leading, spacing: 12) {
       HStack {
-        Text("本地压缩结果")
+        Text("压缩结果")
           .font(.system(size: 15, weight: .semibold))
         Spacer()
         Text("按住查看原图 · 键盘 \\")
@@ -212,7 +212,7 @@ struct ReviewView: View {
             Text(item.source.displayTitle)
               .font(.system(size: 11, weight: .semibold))
               .lineLimit(1)
-            Text(item.errorMessage ?? "本地输出已验证；写入相册后会再次核对资产信息")
+            Text(item.errorMessage ?? "结果已检查，写入相册后会再次确认信息")
               .font(.system(size: 9))
               .foregroundStyle(item.state == .failed ? PhotoSlimTheme.danger : Color.secondary)
               .lineLimit(1)
@@ -246,7 +246,7 @@ struct ReviewView: View {
           .font(.system(size: 11))
           .foregroundStyle(.secondary)
       } else {
-        Text("撤回会清理本地结果；确认删除原件时由 Photos 显示系统确认。")
+        Text("撤回会保留原件；确认删除后，原件会移到“最近删除”。")
           .font(.system(size: 10))
           .foregroundStyle(.secondary)
       }
@@ -430,7 +430,7 @@ private struct ReviewPreviewImage: View {
         VStack(spacing: 8) {
           Image(systemName: kind.symbolName)
             .font(.system(size: 30, weight: .light))
-          Text(isOriginal ? "正在读取原图预览" : "正在读取压缩结果")
+          Text(isOriginal ? "正在加载原图" : "正在加载压缩结果")
             .font(.system(size: 10))
         }
         .foregroundStyle(.secondary)
@@ -534,7 +534,7 @@ private struct ZoomableReviewPreview: View {
         )
       }
       .frame(minHeight: 360)
-      Text("拖动平移 · 捏合或按钮缩放")
+      Text("拖动查看 · 使用按钮缩放")
         .font(.system(size: 10))
         .foregroundStyle(.tertiary)
     }
@@ -655,7 +655,7 @@ struct FailedSessionView: View {
       Image(systemName: "exclamationmark.triangle.fill")
         .font(.system(size: 38))
         .foregroundStyle(PhotoSlimTheme.warning)
-      Text("任务没有创建可审核的副本")
+      Text("没有生成可预览的结果")
         .font(.system(size: 23, weight: .semibold))
       Text(model.currentSession?.statusMessage ?? "任务失败")
         .font(.system(size: 12))

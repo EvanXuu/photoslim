@@ -279,7 +279,6 @@ final class MediaCompressionTests: XCTestCase {
       isHidden: false,
       isCloudOnly: false,
       originalBytes: bytes,
-      estimatedOutputBytes: Int64(Double(bytes) * 0.6),
       codec: kind == .video ? "H.264" : nil,
       albumIdentifiers: [],
       exclusionReasons: []

@@ -5,7 +5,7 @@ import XCTest
 @testable import PhotoSlim
 
 final class PhotoSlimCoreTests: XCTestCase {
-  func testDefaultFilterHidesExcludedAssetsAndSortsBySavings() {
+  func testDefaultFilterHidesExcludedAssetsAndSortsByOriginalSize() {
     let small = fixture(
       id: "small",
       date: Date(timeIntervalSince1970: 1_600_000_000),
@@ -42,10 +42,7 @@ final class PhotoSlimCoreTests: XCTestCase {
 
   func testProcessedLedgerHardBlocksAndDefaultFilterHidesAsset() {
     var processed = fixture(id: "processed")
-    processed.refreshPlanning(
-      settings: .recommended,
-      processedIdentifiers: ["processed"]
-    )
+    processed.exclusionReasons.insert(.alreadyProcessed)
 
     XCTAssertTrue(processed.exclusionReasons.contains(.alreadyProcessed))
     XCTAssertFalse(processed.canProcess)
@@ -186,7 +183,6 @@ final class PhotoSlimCoreTests: XCTestCase {
 
     let report = DiskCapacityService.report(for: [cloud], availableBytes: 50_000_000_000)
     XCTAssertEqual(report.knownCloudDownloadBytes, 0)
-    XCTAssertEqual(report.knownOutputBytes, 0)
     XCTAssertEqual(report.safetyMarginBytes, 0)
     XCTAssertTrue(report.hasEnoughSpace)
     XCTAssertTrue(report.hasUnknownCloudSizes)
@@ -207,7 +203,6 @@ final class PhotoSlimCoreTests: XCTestCase {
     cloud.exclusionReasons.insert(.codecUnverified)
 
     XCTAssertTrue(cloud.canProcess)
-    XCTAssertNil(cloud.estimatedSavingsBytes)
 
     var filter = BrowserFilter()
     filter.sizeFilter = .tenToHundredMB
@@ -277,10 +272,38 @@ final class PhotoSlimCoreTests: XCTestCase {
   func testCloudPlanningLeavesInputAndOutputUnknownUntilDownload() {
     var cloud = fixture(id: "unknown-size", kind: .video, bytes: nil, output: nil)
     cloud.isCloudOnly = true
+    cloud.originalAvailability = .unknown
     XCTAssertEqual(cloud.inputBytesForPlanning, 0)
-    XCTAssertEqual(cloud.outputBytesForPlanning, 0)
-    XCTAssertNil(cloud.estimatedSavingsBytes)
-    XCTAssertNil(cloud.estimatedSavingsRatio)
+  }
+
+  func testOriginalAvailabilityDistinguishesCloudAndUnknownStates() throws {
+    var cloud = fixture(id: "cloud-state", kind: .video)
+    cloud.isCloudOnly = true
+    cloud.originalAvailability = .needsDownload
+    XCTAssertEqual(cloud.originalAvailability.title, "需要 iCloud 下载")
+    XCTAssertEqual(cloud.originalAvailability.symbolName, "icloud.and.arrow.down")
+
+    var unknown = cloud
+    unknown.originalAvailability = .unknown
+    XCTAssertEqual(unknown.originalAvailability.title, "状态未知")
+    XCTAssertEqual(unknown.originalAvailability.symbolName, "questionmark.icloud")
+
+    let data = try JSONEncoder().encode(unknown)
+    let decoded = try JSONDecoder().decode(MediaAsset.self, from: data)
+    XCTAssertEqual(decoded.originalAvailability, .unknown)
+    XCTAssertTrue(decoded.isCloudOnly)
+  }
+
+  func testUnknownOriginalSizeIsNotRenderedInAssetSizeLabels() {
+    let known = fixture(id: "known-size", bytes: 12_345_678)
+    XCTAssertEqual(
+      MediaFormatting.inputBytes(for: known),
+      MediaFormatting.bytes(12_345_678)
+    )
+
+    var unknown = fixture(id: "unknown-size", bytes: nil, output: nil)
+    unknown.isCloudOnly = true
+    XCTAssertNil(MediaFormatting.inputBytes(for: unknown))
   }
 
   func testCloudReportUsesActualBytesAfterDownloadWithoutCallingThemAnEstimate() {
@@ -296,25 +319,38 @@ final class PhotoSlimCoreTests: XCTestCase {
     let report = DiskCapacityService.report(for: [cloud], availableBytes: 10_000_000_000)
     XCTAssertEqual(report.knownCloudDownloadBytes, 400_000_000)
     XCTAssertEqual(report.unknownCloudAssetCount, 0)
-    XCTAssertEqual(report.knownOutputBytes, 200_000_000)
-    XCTAssertEqual(report.requiredBytes, 2_600_000_000)
+    XCTAssertEqual(report.requiredBytes, 2_400_000_000)
   }
 
-  func testManualVideoSettingsEstimateUsesConfiguredBitrate() {
-    var settings = CompressionSettings.recommended
-    settings.videoBitrateMode = .manual
-    settings.videoTargetBitrateKbps = 1_000
-    settings.audioPolicy = .aac
-    settings.aacBitrate = 128_000
+  func testManualVideoBitrateRecommendationUsesAnchorsToleranceAndTwentySamples() {
+    let table = ManualVideoBitrateTable.recommended
+    XCTAssertEqual(table.bitrateKbps(width: 1_920, height: 1_080, frameRate: 30), 6_000)
+    XCTAssertEqual(table.bitrateKbps(width: 1_921, height: 1_080, frameRate: 30), 6_000)
+    XCTAssertEqual(table.bitrateKbps(width: 3_840, height: 2_160, frameRate: 30), 20_000)
+    XCTAssertEqual(table.bitrateKbps(width: 7_680, height: 4_320, frameRate: 30), 80_000)
+    XCTAssertEqual(table.bitrateKbps(width: 2_160, height: 3_840, frameRate: 60), 40_000)
 
-    let estimate = MediaPlanning.estimatedOutputBytes(
-      inputBytes: 100_000_000,
-      kind: .video,
-      settings: settings,
-      duration: 60
+    let samples: [(Int, Int, Double)] = [
+      (320, 240, 30), (640, 480, 30), (854, 480, 30), (1_280, 720, 30),
+      (1_440, 1_080, 30), (1_920, 1_080, 30), (2_048, 1_152, 30), (2_560, 1_440, 30),
+      (3_000, 1_600, 30), (3_840, 2_160, 30), (4_096, 2_160, 30), (5_120, 2_880, 30),
+      (6_000, 3_000, 30), (7_680, 4_320, 30), (8_192, 4_320, 30), (10_240, 5_760, 30),
+      (1_280, 720, 60), (1_920, 1_080, 60), (3_840, 2_160, 60), (7_680, 4_320, 60),
+    ]
+    let values = samples.map { sample in
+      table.bitrateKbps(width: sample.0, height: sample.1, frameRate: sample.2)
+    }
+    XCTAssertEqual(values.count, 20)
+    XCTAssertTrue(values.allSatisfy { $0 >= 32 })
+    XCTAssertEqual(values[16], values[3] * 2)
+    XCTAssertEqual(values[17], values[5] * 2)
+    XCTAssertEqual(values[18], values[9] * 2)
+    XCTAssertEqual(values[19], values[13] * 2)
+    print(
+      "ManualVideoBitrateTable samples: " + samples.enumerated().map { index, sample in
+        "\(index + 1):\(sample.0)x\(sample.1)@\(Int(sample.2))=\(values[index])kbps"
+      }.joined(separator: " · ")
     )
-
-    XCTAssertEqual(estimate, 8_883_000)
   }
 
   func testOldCompressionSettingsDecodeWithManualDefaults() throws {
@@ -332,6 +368,8 @@ final class PhotoSlimCoreTests: XCTestCase {
     """.data(using: .utf8)!
 
     let settings = try JSONDecoder().decode(CompressionSettings.self, from: legacy)
+    XCTAssertEqual(settings.videoEncodingMode, .automatic)
+    XCTAssertEqual(settings.manualVideoBitrates, .recommended)
     XCTAssertEqual(settings.videoBitrateMode, .sourceRatio)
     XCTAssertEqual(settings.videoTargetBitrateKbps, 2_000)
     XCTAssertEqual(settings.videoMaxBitrateKbps, 0)
@@ -351,8 +389,7 @@ final class PhotoSlimCoreTests: XCTestCase {
     )
 
     XCTAssertEqual(report.knownLocalInputBytes, 1_000_000_000)
-    XCTAssertEqual(report.knownOutputBytes, 600_000_000)
-    XCTAssertEqual(report.requiredBytes, 2_600_000_000)
+    XCTAssertEqual(report.requiredBytes, 3_000_000_000)
   }
 
   func testSelectionPlanRejectsOverflowButStillAcceptsLaterSmallerAsset() {
@@ -362,13 +399,13 @@ final class PhotoSlimCoreTests: XCTestCase {
 
     let plan = DiskCapacityService.selectionPlan(
       for: [first, tooLarge, small],
-      availableBytes: 2_750_000_000
+      availableBytes: 3_750_000_000
     )
 
     XCTAssertEqual(plan.accepted.map(\.id), ["first", "small-after"])
     XCTAssertEqual(plan.rejected.map(\.id), ["too-large"])
     XCTAssertTrue(plan.report.hasEnoughSpace)
-    XCTAssertEqual(plan.report.requiredBytes, 2_700_000_000)
+    XCTAssertEqual(plan.report.requiredBytes, 3_200_000_000)
   }
 
   func testLocalStorageReportSeparatesImmediateAndPurgeableCapacity() {
@@ -442,7 +479,7 @@ final class PhotoSlimCoreTests: XCTestCase {
     XCTAssertEqual(loaded.currentSession?.id, session.id)
     XCTAssertEqual(loaded.queue.first?.id, queued.id)
     XCTAssertEqual(loaded.browserFilter.sortOption, .dateOldest)
-    XCTAssertEqual(loaded.schemaVersion, 5)
+    XCTAssertEqual(loaded.schemaVersion, 6)
     XCTAssertEqual(loaded.processedAssetIdentifiers, ["persisted", "compressed"])
     XCTAssertEqual(loadedIndex?.assets.map(\.id), ["persisted"])
     XCTAssertEqual(loadedIndex?.changeTokenData, Data([1, 2, 3]))
@@ -456,7 +493,8 @@ final class PhotoSlimCoreTests: XCTestCase {
     bytes: Int64? = 100_000_000,
     output: Int64? = 50_000_000
   ) -> MediaAsset {
-    MediaAsset(
+    _ = output
+    return MediaAsset(
       id: id,
       kind: kind,
       format: format,
@@ -473,7 +511,6 @@ final class PhotoSlimCoreTests: XCTestCase {
       locationLongitude: nil,
       locationAltitude: nil,
       originalBytes: bytes,
-      estimatedOutputBytes: output,
       codec: kind == .video ? "H.264" : nil,
       albumIdentifiers: [],
       exclusionReasons: []

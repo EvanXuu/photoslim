@@ -1,35 +1,68 @@
 # Changelog
 
+[简体中文](CHANGELOG.zh-CN.md)
+
+## [0.2beta] - 2026-08-19
+
+PhotoSlim 0.2beta makes the compression flow review-first: originals remain untouched until the user has inspected and approved the generated results.
+
+### New features
+
+- **Review before writing**: Compressed results stay in a local review grid. Users can open a result, zoom in, compare it with the original under the pointer, and only then write the approved copy to Photos.
+- **Parallel iCloud downloads**: Up to five originals can download at the same time while local compression continues.
+- **`hvc1` HEVC re-encoding**: Ordinary `hvc1` HEVC videos can be explicitly selected for another HEVC pass. Dolby Vision, HDR, `hev1`, HEVC Alpha, and mixed tracks remain conservatively excluded.
+- **Automatic video export**: AVAssetExportSession's automatic HEVC path is now the default. Manual mode exposes an editable bitrate table for 1080p, 2160p, and 4320p at 30 and 60 fps.
+- **Native window context**: The window title shows the current media type and the subtitle shows the item count, without a duplicate title control in the toolbar.
+
+### Improvements
+
+- Removed speculative output-size and savings estimates from scanning, selection, and preflight. Real savings are recorded only after the output has been created and verified.
+- The default minimum real saving threshold is now 8% for new or untouched legacy settings.
+- iCloud items use the known original `dataSize` when Photos provides it; unknown sizes are not estimated.
+- Incremental scanning, search, filters, sorting, pinning, list/grid views, session recovery, statistics, and task history are retained while the user-facing copy is simpler and less implementation-focused.
+
+### Bug fixes
+
+- Before/After keyboard comparison follows the item under the mouse pointer and no longer produces a key-beep when no text field is focused.
+- Compressed results open in a zoomable detail view.
+- Removed stacked legacy search/title controls that could leave a second visual treatment over the native macOS toolbar.
+
+### Notes
+
+- The prebuilt app is ad-hoc signed and not notarized. macOS may show an unidentified developer warning.
+- New PhotoKit assets receive a new asset identifier and add date. Edit history and face/person relationships are not copied.
+- Start with a small, backed-up batch. This is still an early alpha-quality release.
+
 ## [0.1.0-alpha.1] - 2026-08-10
 
-PhotoSlim 的首个公开 Alpha 版本。该版本用于在少量、有备份的真实照片图库中验证扫描、下载、压缩、审核和 Photos 删除确认的完整事务流程。
+The first public Alpha release for validating scanning, downloading, compression, review, and Photos deletion confirmation with small, backed-up libraries.
 
-### 新功能
+### New features
 
-- 扫描 Apple 照片图库，并通过增量索引减少后续扫描时间。
-- 将普通 JPEG 转换为 HEIC，将 H.264 SDR 或普通 `hvc1` HEVC 视频转换为 HEVC。
-- 最多并行下载 5 个 iCloud 原件，同时显示下载与压缩进度。
-- 在写入 Photos 前本地审核压缩结果，并支持按住原图进行 Before/After 对比。
-- 保存任务队列、处理账本、统计和未完成会话，应用重启后可恢复。
+- Scanned the Apple Photos library and reduced later scan time with incremental indexing.
+- Converted ordinary JPEG photos to HEIC and SDR H.264 or ordinary `hvc1` HEVC videos to HEVC.
+- Downloaded up to five iCloud originals in parallel and showed separate download and compression progress.
+- Provided local Before/After review before writing to Photos.
+- Saved the task queue, processing ledger, statistics, and unfinished sessions across launches.
 
-### 改进
+### Improvements
 
-- 提供手动视频码率、关键帧、帧重排和音频策略设置。
-- 只有下载完成后才读取 iCloud 原件真实大小并检查压缩收益。
-- 结果详情支持 100%–500% 缩放、捏合缩放和拖动平移。
-- 反斜杠快捷键只对鼠标悬浮的结果生效，松开后立即恢复压缩结果。
+- Added manual video bitrate, keyframe, frame-reordering, and audio policies.
+- Read real iCloud file sizes only after downloading the original.
+- Added 100%–500% zoom, pinch-to-zoom, and panning in result details.
+- Limited the backslash shortcut to the result under the pointer.
 
-### 修复
+### Bug fixes
 
-- 修复按原图对比快捷键时 AppKit 发出无焦点输入提示音的问题。
-- 修复点击压缩结果后没有打开可放大详情的问题。
-- 修复网格和详情预览同时注册快捷键时可能争抢事件的问题。
+- Fixed key-beeps caused by Before/After comparison when no text field had focus.
+- Fixed compressed results not opening in a zoomable detail view.
+- Fixed grid and detail previews competing for the same keyboard event.
 
-### 已知限制
+### Notes
 
-- 预编译包使用 ad-hoc 签名且尚未经过 Apple 公证；macOS 可能显示未知开发者警告。
-- 新建 PhotoKit 资产的添加日期和资产 ID 会变化；可逆编辑历史及人物关系不会复制。
-- Dolby Vision、HDR、`hev1`、HEVC Alpha 和混合轨道默认排除。
-- 这是 Alpha 版本；请先用少量、有备份的媒体验证，不要直接处理唯一副本。
+- The prebuilt app was ad-hoc signed and not notarized.
+- Dolby Vision, HDR, `hev1`, HEVC Alpha, and mixed tracks were excluded.
+- The release was intended for small, backed-up test batches.
 
+[0.2beta]: https://github.com/EvanXuu/photoslim/releases/tag/v0.2beta
 [0.1.0-alpha.1]: https://github.com/EvanXuu/photoslim/releases/tag/v0.1.0-alpha.1

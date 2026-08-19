@@ -16,7 +16,7 @@ struct DiskPreflightView: View {
         VStack(alignment: .leading, spacing: 4) {
           Text(
             report.hasEnoughSpace
-              ? (report.hasUnknownCloudSizes ? "可开始，云端逐项核对" : "空间检查通过")
+              ? (report.hasUnknownCloudSizes ? "空间检查通过" : "可以开始")
               : "可用空间不足"
           )
             .font(.system(size: 19, weight: .semibold))
@@ -30,11 +30,11 @@ struct DiskPreflightView: View {
       Divider()
 
       VStack(spacing: 0) {
-        spaceRow("本地原件（已知）", report.knownLocalInputBytes, secondary: true)
-        spaceRow(
-          "iCloud 原件（已知）", report.knownCloudDownloadBytes,
-          secondary: report.knownCloudDownloadBytes == 0)
-        spaceRow("已知压缩输出", report.knownOutputBytes, secondary: false)
+        spaceRow("本机文件", report.knownLocalInputBytes, secondary: true)
+        if report.knownCloudDownloadBytes > 0 {
+          spaceRow("云端文件", report.knownCloudDownloadBytes, secondary: true)
+        }
+        spaceRow("处理所需空间", report.knownLocalInputBytes + report.knownCloudDownloadBytes, secondary: false)
         spaceRow("安全余量", report.safetyMarginBytes, secondary: false)
         Divider().padding(.vertical, 8)
         spaceRow("任务需要", report.requiredBytes, emphasized: true)
@@ -44,7 +44,7 @@ struct DiskPreflightView: View {
 
       if report.hasUnknownCloudSizes {
         Label(
-          "\(report.unknownCloudAssetCount) 个 iCloud 项目的原件大小不会在开始前估算。任务会逐项下载后读取真实字节数，再检查临时空间和压缩率；空间不足时会安全停止并保留原件。",
+          "\(report.unknownCloudAssetCount) 个云端项目的大小暂时未知。开始后会逐项下载并检查空间；空间不足时会停止，原件不会被修改。",
           systemImage: "icloud.and.arrow.down"
         )
         .font(.system(size: 11))
@@ -85,7 +85,6 @@ struct DiskPreflightView: View {
         knownLocalInputBytes: 0,
         knownCloudDownloadBytes: 0,
         unknownCloudAssetCount: 0,
-        knownOutputBytes: 0,
         safetyMarginBytes: 0,
         availableBytes: 0
       )

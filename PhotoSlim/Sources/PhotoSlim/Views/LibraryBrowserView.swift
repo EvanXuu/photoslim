@@ -7,9 +7,6 @@ struct LibraryBrowserView: View {
 
   var body: some View {
     VStack(spacing: 0) {
-      browserTitle
-      Divider()
-
       if model.isScanning {
         ScanProgressStrip()
       }
@@ -45,7 +42,7 @@ struct LibraryBrowserView: View {
 
         Menu {
           Picker("排序", selection: $model.filter.sortOption) {
-            ForEach(SortOption.allCases) { option in
+            ForEach(SortOption.allCases.filter(\.isVisible)) { option in
               Text(option.title).tag(option)
             }
           }
@@ -89,32 +86,10 @@ struct LibraryBrowserView: View {
       SelectionBar(showsSettings: $showsSettings)
     }
     .sheet(isPresented: $showsSettings) {
-      CompressionSettingsView(current: model.settings) { value in
+      CompressionSettingsView(current: model.settings, mediaKind: model.destination.mediaKind) { value in
         model.applyCompressionSettings(value)
       }
     }
-  }
-
-  private var browserTitle: some View {
-    HStack(alignment: .firstTextBaseline) {
-      VStack(alignment: .leading, spacing: 3) {
-        Text(model.destination.title)
-          .font(.system(size: 24, weight: .semibold))
-          .foregroundStyle(PhotoSlimTheme.ink)
-        Text("\(model.visibleAssets.count) 个项目 · 编码待确认的 iCloud 视频默认显示，下载后验证")
-          .font(.system(size: 11))
-          .foregroundStyle(.secondary)
-      }
-      Spacer()
-      if model.isScanning {
-        Label("正在扫描", systemImage: "arrow.triangle.2.circlepath")
-          .font(.system(size: 11, weight: .medium))
-          .foregroundStyle(PhotoSlimTheme.signal)
-      }
-    }
-    .padding(.horizontal, 20)
-    .padding(.vertical, 14)
-    .background(PhotoSlimTheme.surface)
   }
 
   private var activeFilterCount: Int {
@@ -132,9 +107,9 @@ struct LibraryBrowserView: View {
       Image(systemName: model.isScanning ? "photo.stack" : "line.3.horizontal.decrease.circle")
         .font(.system(size: 34, weight: .light))
         .foregroundStyle(.secondary)
-      Text(model.isScanning ? "正在检查照片图库" : "当前筛选下没有项目")
+      Text(model.isScanning ? "正在扫描图库" : "当前筛选下没有项目")
         .font(.system(size: 16, weight: .semibold))
-      Text(model.isScanning ? "本地大小会读取实际资源；iCloud 大小不会估算，任务下载后读取。" : "调整时间、大小或排除项筛选后再试。")
+      Text(model.isScanning ? "请稍候。" : "可以调整筛选条件后再试。")
         .font(.system(size: 12))
         .foregroundStyle(.secondary)
     }
@@ -164,7 +139,7 @@ private struct ScanProgressStrip: View {
         .progressViewStyle(.linear)
         .frame(maxWidth: 210)
         .tint(PhotoSlimTheme.signal)
-      Text(model.scanTotal > 0 ? "正在检查 \(model.scanCompleted)/\(model.scanTotal)" : "正在读取图库")
+      Text(model.scanTotal > 0 ? "正在扫描 \(model.scanCompleted)/\(model.scanTotal)" : "正在扫描图库")
         .font(.system(size: 11, weight: .medium))
       Text(model.scanFilename)
         .font(.system(size: 11))
@@ -192,17 +167,13 @@ private struct SelectionBar: View {
             ? "选择要压缩的项目" : "已选择 \(model.selectedIdentifiers.count) 个项目"
         )
         .font(.system(size: 13, weight: .semibold))
-        if model.selectedIdentifiers.isEmpty {
-          Text("JPEG、H.264 SDR 与普通 hvc1 HEVC 项目可以加入任务")
-            .font(.system(size: 11))
-            .foregroundStyle(.secondary)
-        } else {
+        if !model.selectedIdentifiers.isEmpty {
           Text(selectionSummary)
           .font(.system(size: 11))
           .foregroundStyle(.secondary)
           if let report = model.selectionDiskReport {
             Label(
-              "临时空间需 \(MediaFormatting.bytes(report.requiredBytes)) · 本机可用于任务 \(MediaFormatting.bytes(report.availableBytes))",
+              "需要空间 \(MediaFormatting.bytes(report.requiredBytes)) · 可用 \(MediaFormatting.bytes(report.availableBytes))",
               systemImage: report.hasEnoughSpace
                 ? "externaldrive.badge.checkmark" : "externaldrive.badge.exclamationmark"
             )
@@ -223,7 +194,7 @@ private struct SelectionBar: View {
             .buttonStyle(.link)
             .font(.system(size: 11))
         }
-        Text(model.settings.summary)
+        Text(model.settings.summary(for: model.destination.mediaKind))
           .font(.system(size: 11))
           .foregroundStyle(.secondary)
       }
@@ -244,14 +215,14 @@ private struct SelectionBar: View {
   }
 
   private var selectionSummary: String {
-    let knownInput = MediaFormatting.bytes(model.selectedInputBytes)
-    let cloudNote = model.selectedCloudAssetCount > 0
-      ? " · iCloud \(model.selectedCloudAssetCount) 个（下载后读取大小）"
-      : ""
-    let saving = model.selectedSavingsBytes > 0
-      ? " · 已知项目预计节省 \(MediaFormatting.bytes(model.selectedSavingsBytes))"
-      : ""
-    return "已知原件 \(knownInput)\(cloudNote)\(saving)"
+    var parts: [String] = []
+    if model.selectedInputBytes > 0 {
+      parts.append("文件 \(MediaFormatting.bytes(model.selectedInputBytes))")
+    }
+    if model.selectedCloudAssetCount > 0 {
+      parts.append("云端项目 \(model.selectedCloudAssetCount) 个")
+    }
+    return parts.joined(separator: " · ")
   }
 }
 
@@ -299,7 +270,9 @@ private struct AssetCard: View {
             .padding(8)
 
           HStack(spacing: 5) {
-            if asset.isCloudOnly { Image(systemName: "icloud.and.arrow.down") }
+            if asset.originalAvailability != .local {
+              Image(systemName: asset.originalAvailability.symbolName)
+            }
             if asset.kind == .video { Text(MediaFormatting.duration(asset.duration)) }
           }
           .font(.system(size: 10, weight: .semibold))
@@ -328,24 +301,19 @@ private struct AssetCard: View {
               .font(.system(size: 9, weight: .bold))
               .foregroundStyle(.secondary)
             if asset.isPlainHVC1 {
-              Text("HEVC→HEVC")
+              Text("再次压缩")
                 .font(.system(size: 8, weight: .semibold))
                 .foregroundStyle(PhotoSlimTheme.warning)
             }
           }
-          Text(sizeSummary(for: asset))
-          .font(.system(size: 10, design: .monospaced))
-          .foregroundStyle(.secondary)
-          HStack {
-            Text(MediaFormatting.date(asset.creationDate))
-            Spacer()
-            if let savings = asset.estimatedSavingsRatio {
-              Text("省 \(MediaFormatting.percentage(savings))")
-                .foregroundStyle(PhotoSlimTheme.signal)
-            }
+          if let sizeSummary = sizeSummary(for: asset) {
+            Text(sizeSummary)
+              .font(.system(size: 10, design: .monospaced))
+              .foregroundStyle(.secondary)
           }
-          .font(.system(size: 10, weight: .medium))
-          .foregroundStyle(.secondary)
+          Text(MediaFormatting.date(asset.creationDate))
+            .font(.system(size: 10, weight: .medium))
+            .foregroundStyle(.secondary)
         }
       }
       .padding(8)
@@ -373,16 +341,21 @@ private struct AssetCard: View {
       }
     }
     .accessibilityLabel(
-      "\(asset.displayTitle)，\(asset.format.title)，\(MediaFormatting.inputBytes(for: asset))"
+      accessibilityLabelText
     )
     .accessibilityValue(selected ? "已选择" : (asset.canProcess ? "未选择" : "不可处理"))
   }
 
-  private func sizeSummary(for asset: MediaAsset) -> String {
-    guard let output = asset.estimatedOutputBytes else {
-      return "\(MediaFormatting.inputBytes(for: asset)) → 下载后计算"
+  private var accessibilityLabelText: String {
+    var parts = [asset.displayTitle, asset.format.title]
+    if let inputBytes = MediaFormatting.inputBytes(for: asset) {
+      parts.append(inputBytes)
     }
-    return "\(MediaFormatting.inputBytes(for: asset)) → \(MediaFormatting.bytes(output))"
+    return parts.joined(separator: "，")
+  }
+
+  private func sizeSummary(for asset: MediaAsset) -> String? {
+    MediaFormatting.inputBytes(for: asset)
   }
 }
 
@@ -405,8 +378,7 @@ private struct AssetListView: View {
             Text("项目").frame(maxWidth: .infinity, alignment: .leading)
             Text("格式").frame(width: 70, alignment: .leading)
             Text("拍摄日期").frame(width: 100, alignment: .leading)
-            Text("原大小").frame(width: 90, alignment: .trailing)
-            Text("预计节省").frame(width: 90, alignment: .trailing)
+            Text("文件大小").frame(width: 90, alignment: .trailing)
           }
           .font(.system(size: 10, weight: .semibold))
           .foregroundStyle(.secondary)
@@ -446,18 +418,14 @@ private struct AssetListRow: View {
           Text(
             asset.dimensionsLabel
               + (asset.kind == .video ? " · " + MediaFormatting.duration(asset.duration) : "")
-              + (asset.isPlainHVC1 ? " · HEVC→HEVC" : "")
+            + (asset.isPlainHVC1 ? " · 再次压缩" : "")
           )
           .font(.system(size: 10)).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         Text(asset.format.title).frame(width: 70, alignment: .leading)
         Text(MediaFormatting.date(asset.creationDate)).frame(width: 100, alignment: .leading)
-        Text(MediaFormatting.inputBytes(for: asset)).frame(width: 90, alignment: .trailing)
-        Text(MediaFormatting.bytes(asset.estimatedSavingsBytes))
-          .foregroundStyle(
-            asset.estimatedSavingsBytes == nil ? Color.secondary : PhotoSlimTheme.signal
-          )
+        Text(MediaFormatting.inputBytes(for: asset) ?? "")
           .frame(width: 90, alignment: .trailing)
       }
       .font(.system(size: 11))

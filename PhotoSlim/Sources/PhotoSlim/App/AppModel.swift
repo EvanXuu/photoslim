@@ -27,6 +27,14 @@ enum SidebarDestination: String, CaseIterable, Identifiable, Hashable {
     }
   }
 
+  var mediaKind: MediaKind? {
+    switch self {
+    case .photos: return .photo
+    case .videos: return .video
+    default: return nil
+    }
+  }
+
   var symbol: String {
     switch self {
     case .library: return "photo.on.rectangle.angled"
@@ -48,8 +56,10 @@ struct AppNotice: Identifiable {
 
 private struct PreparedDownload: @unchecked Sendable {
   let source: MediaAsset
+  let originalFileURL: URL
   let imageOriginal: ImageOriginal?
   let videoAsset: AVAsset?
+  let videoAnalysis: OriginalVideoAnalysis?
 }
 
   @MainActor
@@ -151,18 +161,8 @@ private struct PreparedDownload: @unchecked Sendable {
     selectedAssets.reduce(0) { $0 + $1.inputBytesForPlanning }
   }
 
-  var selectedEstimatedInputBytes: Int64 {
-    // Kept as a compatibility surface for older views. Cloud sizes are no
-    // longer estimated before the task downloads the original.
-    0
-  }
-
   var selectedCloudAssetCount: Int {
     selectedAssets.filter(\.isCloudOnly).count
-  }
-
-  var selectedSavingsBytes: Int64 {
-    selectedAssets.reduce(0) { $0 + ($1.estimatedSavingsBytes ?? 0) }
   }
 
   var reservedAssetIdentifiers: Set<String> {
@@ -235,12 +235,25 @@ private struct PreparedDownload: @unchecked Sendable {
           filter.excludedReasons.remove(.codecUnverified)
           migratedState = true
         }
+        if schemaVersion < 6, abs(settings.minimumSavingsRatio - 0.10) < 0.0001 {
+          // Version 5 used 10% as the untouched default. Move only that old
+          // default; a deliberately chosen custom value remains unchanged.
+          settings.minimumSavingsRatio = 0.08
+          migratedState = true
+        }
+        if filter.excludedReasons.remove(.lowSavings) != nil {
+          migratedState = true
+        }
+        if !filter.sortOption.isVisible {
+          filter.sortOption = .sizeLargest
+          migratedState = true
+        }
         if filter.mediaKind != nil {
           filter.mediaKind = nil
           migratedState = true
         }
       } catch {
-        notice = AppNotice(title: "会话恢复失败", message: error.localizedDescription)
+        notice = AppNotice(title: "无法恢复任务", message: "上次任务没有恢复完成，请检查任务历史。")
       }
 
       refreshStorageStatus(enforceSelectionLimit: true, showNotice: false)
@@ -273,7 +286,7 @@ private struct PreparedDownload: @unchecked Sendable {
     libraryChangePending = false
     scanCompleted = 0
     scanTotal = 0
-    scanFilename = hasLibraryIndex ? "正在检查图库变更" : "正在建立首次索引"
+    scanFilename = hasLibraryIndex ? "正在检查图库更新" : "正在首次扫描图库"
     let scanSettings = settings
     let scanProcessedIdentifiers = processedAssetIdentifiers
     let previousIndex =
@@ -312,15 +325,15 @@ private struct PreparedDownload: @unchecked Sendable {
           )
         } catch {
           notice = AppNotice(
-            title: "无法保存图库索引",
-            message: "本次扫描结果仍可使用，但下次启动可能需要重新建立索引：\(error.localizedDescription)"
+            title: "无法保存扫描结果",
+            message: "本次结果仍可使用，下次启动可能需要重新扫描。"
           )
         }
         refreshStorageStatus(enforceSelectionLimit: true, showNotice: false)
       } catch is CancellationError {
         // A cancelled scan leaves the last complete result visible.
       } catch {
-        notice = AppNotice(title: "扫描失败", message: error.localizedDescription)
+        notice = AppNotice(title: "扫描失败", message: "请稍后重试，原有扫描结果未被修改。")
       }
       isScanning = false
       scanTask = nil
@@ -342,7 +355,12 @@ private struct PreparedDownload: @unchecked Sendable {
     defer { isLoadingLibraryIndex = false }
     do {
       guard let index = try await store.loadLibraryIndex() else { return }
-      assets = index.assets
+      assets = index.assets.map {
+        var asset = $0
+        // Old indexes may contain the removed scan-time low-savings marker.
+        asset.exclusionReasons.remove(.lowSavings)
+        return asset
+      }
       libraryChangeTokenData = index.changeTokenData
       hasLibraryIndex = true
       refreshStorageStatus(enforceSelectionLimit: true, showNotice: false)
@@ -382,7 +400,7 @@ private struct PreparedDownload: @unchecked Sendable {
         )
       )
     } catch {
-      notice = AppNotice(title: "无法更新图库索引", message: error.localizedDescription)
+      notice = AppNotice(title: "无法保存扫描结果", message: "当前图库内容仍可使用，请稍后重试。")
     }
   }
 
@@ -411,7 +429,7 @@ private struct PreparedDownload: @unchecked Sendable {
       guard removed.isEmpty else {
         notice = AppNotice(
           title: "已取消超出空间的选择",
-          message: "本机可用空间发生变化，已取消 \(removed.count) 个后选项目；这个新项目没有被选中。"
+          message: "空间不足，已取消 \(removed.count) 个项目；新项目未加入。"
         )
         return
       }
@@ -436,13 +454,13 @@ private struct PreparedDownload: @unchecked Sendable {
       selectionDiskReport = report
       if asset.isPlainHVC1 {
         notice = AppNotice(
-          title: "已选择 HEVC→HEVC 项目",
-          message: "普通 hvc1 视频会再次进行有损 HEVC 编码。只有在实际输出更小并通过解码、尺寸、时长验证后，才会进入本地预览；原件仍保持不动。"
+          title: "已选择需要再次压缩的视频",
+          message: "这段视频会再次压缩。只有结果更小且检查通过后，才会进入预览；原件不会被修改。"
         )
       }
     } catch {
-      storageStatusError = error.localizedDescription
-      notice = AppNotice(title: "无法检查本机空间", message: error.localizedDescription)
+      storageStatusError = "无法读取本机空间"
+      notice = AppNotice(title: "无法检查本机空间", message: "请稍后重试。")
     }
   }
 
@@ -477,12 +495,12 @@ private struct PreparedDownload: @unchecked Sendable {
         }
         notice = AppNotice(
           title: "已按本机空间限制选择",
-          message: details.joined(separator: "；") + "。iCloud 项目大小会在任务下载后读取。"
+          message: details.joined(separator: "；") + "。云端项目会在开始后确认大小。"
         )
       }
     } catch {
-      storageStatusError = error.localizedDescription
-      notice = AppNotice(title: "无法检查本机空间", message: error.localizedDescription)
+      storageStatusError = "无法读取本机空间"
+      notice = AppNotice(title: "无法检查本机空间", message: "请稍后重试。")
     }
   }
 
@@ -530,7 +548,6 @@ private struct PreparedDownload: @unchecked Sendable {
     refreshStorageStatus(enforceSelectionLimit: true, showNotice: true)
     Task { [weak self] in
       guard let self else { return }
-      await self.recalculatePlanningEstimates()
       await persist()
       await saveLibraryIndexIfAvailable()
     }
@@ -559,13 +576,13 @@ private struct PreparedDownload: @unchecked Sendable {
         )
       }
     } catch {
-      storageStatusError = error.localizedDescription
+      storageStatusError = "无法读取本机空间"
     }
   }
 
   func prepareSelectedTask() {
     guard !selectedIdentifiers.isEmpty else {
-      notice = AppNotice(title: "尚未选择项目", message: "请选择至少一个可处理的 JPEG、H.264 SDR 或普通 hvc1 HEVC 项目。")
+      notice = AppNotice(title: "尚未选择项目", message: "请选择至少一个可处理的项目。")
       return
     }
     do {
@@ -580,7 +597,7 @@ private struct PreparedDownload: @unchecked Sendable {
       }
       let selected = orderedSelectedAssets().filter(\.canProcess)
       guard !selected.isEmpty else {
-        notice = AppNotice(title: "尚未选择项目", message: "请选择至少一个可处理的 JPEG、H.264 SDR 或普通 hvc1 HEVC 项目。")
+        notice = AppNotice(title: "尚未选择项目", message: "请选择至少一个可处理的项目。")
         return
       }
       let report = DiskCapacityService.report(
@@ -590,7 +607,7 @@ private struct PreparedDownload: @unchecked Sendable {
       pendingTask = QueuedCompressionTask(assets: selected, settings: settings)
       pendingDiskReport = report
     } catch {
-      notice = AppNotice(title: "无法检查可用空间", message: error.localizedDescription)
+      notice = AppNotice(title: "无法检查可用空间", message: "请稍后重试。")
     }
   }
 
@@ -605,7 +622,7 @@ private struct PreparedDownload: @unchecked Sendable {
       notice = AppNotice(
         title: "可用空间不足",
         message:
-          "预计还需要 \(MediaFormatting.bytes(report.requiredBytes - report.availableBytes))。请释放空间后重试。"
+          "还需要保留 \(MediaFormatting.bytes(report.requiredBytes - report.availableBytes))。请释放空间后重试。"
       )
       return
     }
@@ -654,7 +671,7 @@ private struct PreparedDownload: @unchecked Sendable {
         pendingCleanupSessionID = sessionID
         notice = AppNotice(
           title: "临时文件清理未完成",
-          message: "任务已终止，原件未修改。稍后可在任务历史中重试清理：\(error.localizedDescription)"
+          message: "任务已终止，原件未修改。稍后可在任务历史中重试清理。"
         )
       }
       guard let current = currentSession, current.id == sessionID else { return }
@@ -685,7 +702,7 @@ private struct PreparedDownload: @unchecked Sendable {
         notice = AppNotice(title: "临时文件已清理", message: "终止任务留下的临时文件已经删除，原件未修改。")
         await persist()
       } catch {
-        notice = AppNotice(title: "临时文件仍未清理", message: error.localizedDescription)
+        notice = AppNotice(title: "清理仍未完成", message: "原件未修改，请稍后重试。")
       }
     }
   }
@@ -764,7 +781,7 @@ private struct PreparedDownload: @unchecked Sendable {
       }
     } catch {
       queue.insert(task, at: 0)
-      queueStatusMessage = "重新检查磁盘空间失败：\(error.localizedDescription)"
+      queueStatusMessage = "重新检查空间失败，请稍后重试。"
       destination = .queue
       Task { await persist() }
       return
@@ -805,6 +822,7 @@ private struct PreparedDownload: @unchecked Sendable {
             return try await self.download(
               itemID: itemID,
               source: record.source,
+              directory: directory,
               isPrefetch: true
             )
           }
@@ -843,6 +861,8 @@ private struct PreparedDownload: @unchecked Sendable {
         }
       }
 
+      removeDownloadedOriginalFiles(in: directory)
+
       guard var completed = currentSession else { return }
       let previewCount = completed.items.filter {
         [.fileVerified, .reviewPending].contains($0.state)
@@ -857,6 +877,9 @@ private struct PreparedDownload: @unchecked Sendable {
       isTaskPanelMinimized = false
       await persist()
     } catch {
+      if let directory = currentWorkingDirectory {
+        removeDownloadedOriginalFiles(in: directory)
+      }
       guard var failed = currentSession else { return }
       let hasCreatedCopies = failed.items.contains {
         $0.createdAssetIdentifier != nil
@@ -864,8 +887,8 @@ private struct PreparedDownload: @unchecked Sendable {
       failed.phase = hasCreatedCopies ? .reviewPending : .failed
       failed.statusMessage =
         hasCreatedCopies
-        ? "已有压缩副本需要审核；后续处理已停止：\(error.localizedDescription)"
-        : error.localizedDescription
+        ? "有项目未完成，任务已暂停，请检查结果。"
+        : "任务没有完成，原件未修改。"
       failed.updatedAt = Date()
       currentSession = failed
       isTaskPanelMinimized = false
@@ -876,11 +899,12 @@ private struct PreparedDownload: @unchecked Sendable {
   private func download(
     itemID: UUID,
     source originalSource: MediaAsset,
+    directory: URL,
     isPrefetch: Bool = false
   ) async throws
     -> PreparedDownload
   {
-    guard let session = currentSession else { throw CancellationError() }
+    guard currentSession != nil else { throw CancellationError() }
     var source = originalSource
     let isCloud = source.isCloudOnly
     updateItem(itemID, makeCurrent: !isPrefetch) {
@@ -891,14 +915,12 @@ private struct PreparedDownload: @unchecked Sendable {
       $0.errorMessage = nil
     }
     if !isPrefetch, isCloud {
-      updateSessionStatus("正在从 iCloud 下载 \(source.displayTitle)")
+      updateSessionStatus("正在下载 \(source.displayTitle)")
     } else if !isPrefetch {
-      updateSessionStatus("正在读取 \(source.displayTitle)")
+      updateSessionStatus("正在准备 \(source.displayTitle)")
     }
     await persist()
 
-    var imageOriginal: ImageOriginal?
-    var videoAsset: AVAsset?
     let downloadUpdate: @Sendable (Double) -> Void = { [weak self] value in
       Task { @MainActor in
         self?.updateItem(itemID, makeCurrent: !isPrefetch) {
@@ -907,54 +929,56 @@ private struct PreparedDownload: @unchecked Sendable {
         }
       }
     }
-    if source.kind == .photo {
-      imageOriginal = try await photoLibrary.requestImageOriginal(
-        identifier: source.id,
-        networkAllowed: true,
-        progress: downloadUpdate
-      )
-    } else {
-      videoAsset = try await photoLibrary.requestVideoAsset(
-        identifier: source.id,
-        networkAllowed: true,
-        progress: downloadUpdate
-      )
+    let downloaded = try await photoLibrary.downloadOriginalResource(
+      identifier: source.id,
+      directory: directory,
+      networkAllowed: true,
+      progress: downloadUpdate
+    )
+    var handedOff = false
+    defer {
+      if !handedOff {
+        try? FileManager.default.removeItem(at: downloaded.fileURL)
+      }
     }
-
-    let measuredBytes: Int64
-    if let resourceBytes = photoLibrary.knownOriginalResourceBytes(identifier: source.id),
-      resourceBytes > 0
-    {
-      // The value is read only after the request above has completed. It is the
-      // actual Photos resource size, never a resolution/bitrate estimate.
-      measuredBytes = resourceBytes
-    } else if let imageOriginal {
-      measuredBytes = Int64(imageOriginal.data.count)
-    } else if let videoAsset {
-      measuredBytes = await measuredVideoBytes(videoAsset)
-    } else {
-      measuredBytes = 0
-    }
+    let measuredBytes = downloaded.byteCount
 
     guard measuredBytes > 0 else { throw CompressionError.originalSizeUnavailable }
+    if let analysis = downloaded.videoAnalysis {
+      source = source.updated(with: analysis)
+    }
     source.originalBytes = measuredBytes
     source.isCloudOnly = false
-    source.estimatedOutputBytes = MediaPlanning.estimatedOutputBytes(
-      inputBytes: measuredBytes,
-      kind: source.kind,
-      settings: session.settings,
-      duration: source.duration
-    )
+    source.originalAvailability = .local
+    source.exclusionReasons.remove(.lowSavings)
+    updateStorageAfterOriginalDownload()
     updateItem(itemID, makeCurrent: !isPrefetch) {
       $0.source = source
       $0.downloadProgress = 1
       $0.progress = 0.38
     }
+
+    // Check immediately after every real cloud download as well as again
+    // before encoding. This prevents five completed prefetches from filling
+    // the working volume before the current item gets a chance to validate it.
+    let runtimeAssets = currentSession?.items.map {
+      $0.id == itemID ? source : $0.source
+    } ?? [source]
+    let runtimeReport = try diskReport(for: runtimeAssets)
+    guard runtimeReport.hasEnoughSpace else {
+      throw CompressionError.insufficientDiskSpace(
+        required: runtimeReport.requiredBytes,
+        available: runtimeReport.availableBytes
+      )
+    }
     await persist()
+    handedOff = true
     return PreparedDownload(
       source: source,
-      imageOriginal: imageOriginal,
-      videoAsset: videoAsset
+      originalFileURL: downloaded.fileURL,
+      imageOriginal: downloaded.imageOriginal,
+      videoAsset: downloaded.videoAsset,
+      videoAnalysis: downloaded.videoAnalysis
     )
   }
 
@@ -983,13 +1007,30 @@ private struct PreparedDownload: @unchecked Sendable {
     if let prepared {
       downloaded = prepared
     } else {
-      downloaded = try await download(itemID: itemID, source: source)
+      downloaded = try await download(itemID: itemID, source: source, directory: directory)
+    }
+    defer {
+      // The original resource is only an encode input. The durable artifact is
+      // the verified compressed file; keeping the downloaded source around
+      // would make iCloud tasks consume two full copies of every video.
+      try? FileManager.default.removeItem(at: downloaded.originalFileURL)
     }
     source = downloaded.source
 
+    guard source.canProcess else {
+      if source.exclusionReasons.contains(.hdr) {
+        throw CompressionError.hdrVideoUnsupported
+      }
+      throw CompressionError.unsupportedVideoCodec(source.codec ?? source.format.title)
+    }
+
     // Cloud size is deliberately checked only after the real resource has
-    // arrived. The preflight can never know this value from PhotoKit alone.
-    let runtimeReport = try diskReport(for: [source])
+    // arrived. Recheck the whole session so five prefetched originals and the
+    // current output cannot silently exceed the available working volume.
+    let runtimeAssets = currentSession?.items.map {
+      $0.id == itemID ? source : $0.source
+    } ?? [source]
+    let runtimeReport = try diskReport(for: runtimeAssets)
     guard runtimeReport.hasEnoughSpace else {
       throw CompressionError.insufficientDiskSpace(
         required: runtimeReport.requiredBytes,
@@ -1041,7 +1082,7 @@ private struct PreparedDownload: @unchecked Sendable {
       $0.actualOutputBytes = output.byteCount
       $0.progress = 0.88
     }
-    updateSessionStatus("正在创建并核对压缩副本")
+    updateSessionStatus("正在准备写入相册的结果")
     await persist()
 
     let identifier = try await photoLibrary.importCompressedAsset(
@@ -1134,7 +1175,7 @@ private struct PreparedDownload: @unchecked Sendable {
   private func performRollback() async {
     guard var session = currentSession else { return }
     session.phase = .rollingBack
-    session.statusMessage = "正在清理本地压缩结果"
+    session.statusMessage = "正在清理压缩结果"
     for index in session.items.indices {
       if session.items[index].createdAssetIdentifier != nil,
         session.items[index].state != .failed
@@ -1148,7 +1189,7 @@ private struct PreparedDownload: @unchecked Sendable {
     do {
       let identifiers = session.items.compactMap(\.createdAssetIdentifier)
       if !identifiers.isEmpty {
-        session.statusMessage = "正在把旧版压缩副本移到最近删除"
+        session.statusMessage = "正在撤回压缩结果"
         currentSession = session
         try await photoLibrary.deleteAssets(identifiers: identifiers)
       }
@@ -1157,7 +1198,7 @@ private struct PreparedDownload: @unchecked Sendable {
         finished.items[index].state = .rolledBack
       }
       finished.phase = .rolledBack
-      finished.statusMessage = identifiers.isEmpty ? "本地压缩结果已清理" : "压缩副本已移到最近删除"
+      finished.statusMessage = identifiers.isEmpty ? "压缩结果已清理" : "压缩结果已移到最近删除"
       finished.updatedAt = Date()
       currentSession = finished
       await archiveAndClear(finished)
@@ -1233,7 +1274,7 @@ private struct PreparedDownload: @unchecked Sendable {
   private func performCommit() async {
     guard var session = currentSession else { return }
     session.phase = .committing
-    session.statusMessage = "正在把审核通过的压缩结果写入相册"
+    session.statusMessage = "正在写入相册"
     currentSession = session
     await persist()
 
@@ -1268,7 +1309,7 @@ private struct PreparedDownload: @unchecked Sendable {
       }
       guard !valid.isEmpty else {
         ready.phase = .reviewPending
-        ready.statusMessage = "没有通过验证的压缩结果；原件未修改"
+        ready.statusMessage = "没有可写入的压缩结果；原件未修改"
         ready.updatedAt = Date()
         currentSession = ready
         await persist()
@@ -1302,7 +1343,6 @@ private struct PreparedDownload: @unchecked Sendable {
       finished.statusMessage = "原件已移到最近删除"
       finished.updatedAt = Date()
       currentSession = finished
-      await recalculatePlanningEstimates()
       await saveLibraryIndexIfAvailable()
       await archiveAndClear(finished)
     } catch {
@@ -1320,7 +1360,7 @@ private struct PreparedDownload: @unchecked Sendable {
       }
     }
     currentSession = session
-    notice = AppNotice(title: "照片图库没有完成操作", message: error.localizedDescription)
+    notice = AppNotice(title: "照片图库没有完成操作", message: "原件未修改，请稍后重试。")
     Task { await persist() }
   }
 
@@ -1332,7 +1372,6 @@ private struct PreparedDownload: @unchecked Sendable {
           processedAssetIdentifiers.insert(createdAssetIdentifier)
         }
       }
-      await recalculatePlanningEstimates()
       await saveLibraryIndexIfAvailable()
     }
     if !history.contains(where: { $0.id == session.id }) {
@@ -1364,7 +1403,7 @@ private struct PreparedDownload: @unchecked Sendable {
       start(task: next)
     } catch {
       destination = .queue
-      queueStatusMessage = "队首任务空间检查失败：\(error.localizedDescription)"
+      queueStatusMessage = "队首任务无法开始，请检查可用空间。"
     }
   }
 
@@ -1434,7 +1473,7 @@ private struct PreparedDownload: @unchecked Sendable {
     do {
       try await store.save(state)
     } catch {
-      notice = AppNotice(title: "无法保存会话", message: error.localizedDescription)
+      notice = AppNotice(title: "无法保存任务", message: "当前进度仍保留在本机，请稍后重试。")
     }
   }
 
@@ -1509,70 +1548,57 @@ private struct PreparedDownload: @unchecked Sendable {
     refreshStorageStatus(enforceSelectionLimit: false, showNotice: false)
   }
 
-  private func recalculatePlanningEstimates() async {
-    let cachedAssets = assets
-    let settingsSnapshot = settings
-    let processedSnapshot = processedAssetIdentifiers
-    let refreshedAssets = await Task.detached(priority: .userInitiated) {
-      var result = cachedAssets
-      for index in result.indices {
-        result[index].refreshPlanning(
-          settings: settingsSnapshot,
-          processedIdentifiers: processedSnapshot
-        )
-      }
-      return result
-    }.value
-    guard !Task.isCancelled else { return }
-    assets = refreshedAssets
-    refreshStorageStatus(enforceSelectionLimit: true, showNotice: false)
-  }
-
   private func prettyOutputFilename(for source: MediaAsset) -> String {
     let base = URL(fileURLWithPath: source.filename).deletingPathExtension().lastPathComponent
     let safe = base.isEmpty ? "PhotoSlim" : base
     return source.kind == .photo ? "\(safe).heic" : "\(safe).mov"
   }
 
-  private func measuredVideoBytes(_ asset: AVAsset) async -> Int64 {
-    if let urlAsset = asset as? AVURLAsset,
-      let size = try? urlAsset.url.resourceValues(forKeys: [.fileSizeKey]).fileSize
-    {
-      return Int64(size)
+  private func removeDownloadedOriginalFiles(in directory: URL) {
+    guard let contents = try? FileManager.default.contentsOfDirectory(
+      at: directory,
+      includingPropertiesForKeys: nil
+    ) else { return }
+    for fileURL in contents where fileURL.lastPathComponent.hasPrefix("original-") {
+      try? FileManager.default.removeItem(at: fileURL)
+    }
+  }
+
+  private func updateStorageAfterOriginalDownload() {
+    _ = try? updateLocalStorageReport()
+  }
+
+}
+
+private extension MediaAsset {
+  func updated(with analysis: OriginalVideoAnalysis) -> MediaAsset {
+    var result = self
+    result.codec = analysis.codec
+    result.originalAvailability = .local
+    result.isCloudOnly = false
+    result.exclusionReasons.remove(.codecUnverified)
+
+    if analysis.isHDR {
+      result.exclusionReasons.insert(.hdr)
     }
 
-    // PhotoKit may return an AVComposition whose segments point at the
-    // downloaded source files. Their unique file sizes are a better baseline
-    // than a single video-track estimate and include the container/audio data.
-    if asset is AVComposition {
-      var sourceURLs: Set<URL> = []
-      for mediaType in [AVMediaType.video, AVMediaType.audio] {
-        let tracks = (try? await asset.loadTracks(withMediaType: mediaType)) ?? []
-        for track in tracks {
-          guard let compositionTrack = track as? AVCompositionTrack else { continue }
-          for segment in compositionTrack.segments where !segment.isEmpty {
-            if let sourceURL = segment.sourceURL { sourceURLs.insert(sourceURL) }
-          }
-        }
-      }
-      let sourceSizes = sourceURLs.compactMap { url -> Int64? in
-        guard url.isFileURL,
-          let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize,
-          size > 0
-        else { return nil }
-        return Int64(size)
-      }
-      if !sourceSizes.isEmpty {
-        return sourceSizes.reduce(0) { total, size in
-          total > Int64.max - size ? Int64.max : total + size
-        }
-      }
+    switch analysis.codec {
+    case "H.264":
+      result.format = .h264
+      result.exclusionReasons.remove(.efficientCodec)
+      result.exclusionReasons.remove(.unsupported)
+    case "HEVC (hvc1)":
+      result.format = .hevc
+      result.exclusionReasons.remove(.efficientCodec)
+      result.exclusionReasons.remove(.unsupported)
+    case "HEVC":
+      result.format = .hevc
+      result.exclusionReasons.insert(.efficientCodec)
+      result.exclusionReasons.remove(.unsupported)
+    default:
+      result.format = .other
+      result.exclusionReasons.insert(.unsupported)
     }
-
-    // Estimated data rate is not a file size and can be wildly wrong for
-    // iPhone footage. Refuse to turn it into a fake byte count; the task will
-    // stop safely and leave the original untouched if no local resource size
-    // can be found after the download.
-    return 0
+    return result
   }
 }

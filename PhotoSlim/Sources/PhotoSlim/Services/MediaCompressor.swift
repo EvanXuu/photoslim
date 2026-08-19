@@ -29,33 +29,32 @@ enum CompressionError: LocalizedError {
 
   var errorDescription: String? {
     switch self {
-    case .invalidImage: return "原始图片无法解码。"
-    case .cannotCreateDestination: return "无法创建压缩输出文件。"
-    case .imageEncodingFailed: return "HEIC 编码失败。"
-    case .missingVideoTrack: return "原文件没有可用的视频轨道。"
-    case .reader(let message): return "读取视频失败：\(message)"
-    case .writer(let message): return "写入 HEVC 视频失败：\(message)"
-    case .writerAppend(let track, let detail):
-      return "写入 HEVC 视频失败：\(track)轨道无法追加媒体样本（\(detail)）"
-    case .outputVerification(let message): return "本地输出验证失败：\(message)"
+    case .invalidImage: return "无法读取这张照片。"
+    case .cannotCreateDestination: return "无法创建压缩结果。"
+    case .imageEncodingFailed: return "照片压缩失败。"
+    case .missingVideoTrack: return "无法读取视频内容。"
+    case .reader: return "视频压缩失败，请稍后重试。"
+    case .writer: return "视频压缩失败，请稍后重试。"
+    case .writerAppend: return "视频压缩失败，请稍后重试。"
+    case .outputVerification: return "压缩结果检查未通过，原件未修改。"
     case .insufficientSavings(let actual, let required):
       if actual < 0 {
-        return "输出比原件大 \(Int(abs(actual) * 100))%，无法达到设置的 \(Int(required * 100))% 节省。"
+        return "结果比原件更大，未写入相册。"
       }
       return "实际只节省 \(Int(actual * 100))%，低于设置的 \(Int(required * 100))%。"
     case .insufficientDiskSpace(let required, let available):
       let shortfall = max(0, required - available)
-      return "下载后的实际文件需要再保留 \(MediaFormatting.bytes(shortfall)) 临时空间，当前可用空间不足。原件未修改。"
+      return "空间不足，还需要 \(MediaFormatting.bytes(shortfall)) 可用空间。原件未修改。"
     case .originalSizeUnavailable:
-      return "下载完成，但无法读取原视频的实际文件大小。为避免错误计算压缩率，已安全跳过。"
-    case .unsupportedVideoCodec(let codec):
-      return "下载后的原视频是 \(codec)，不是本版本支持的 H.264 或普通 hvc1 HEVC，已安全跳过。"
+      return "无法确认原件大小，已安全跳过。"
+    case .unsupportedVideoCodec:
+      return "暂不支持这种视频格式，已安全跳过。"
     case .hdrVideoUnsupported:
-      return "下载后的原视频包含 HDR/HLG/PQ 色彩信息，已安全跳过。"
+      return "暂不支持包含 HDR 信息的视频，已安全跳过。"
     case .hardwareHEVCUnavailable:
-      return "当前设备没有可用的 HEVC 硬件编码器。原件未修改。"
-    case .exportSession(let message):
-      return "Apple 视频导出接口失败：\(message)"
+      return "当前设备暂时无法压缩此视频，原件未修改。"
+    case .exportSession:
+      return "视频压缩失败，请稍后重试。"
     }
   }
 }
@@ -249,6 +248,7 @@ final class VideoCompressor: @unchecked Sendable {
 
     let naturalSize = try await videoTrack.load(.naturalSize)
     let preferredTransform = try await videoTrack.load(.preferredTransform)
+    let nominalFrameRate = Double(try await videoTrack.load(.nominalFrameRate))
     let estimatedDataRate = try await videoTrack.load(.estimatedDataRate)
     let videoTimeRange = try await videoTrack.load(.timeRange)
     let duration = try await asset.load(.duration)
@@ -276,14 +276,20 @@ final class VideoCompressor: @unchecked Sendable {
       ? measuredTotalRate
       : max(advertisedTotalRate, 0)
     let targetRate: Int
-    switch settings.videoBitrateMode {
-    case .sourceRatio:
+    switch settings.videoEncodingMode {
+    case .automatic:
+      // The automatic route normally uses AVAssetExportSession. This fallback
+      // keeps the lower-level writer safe if Apple changes route compatibility.
       let sourceVideoRate = max(32_000, sourceTotalRate - max(audioDataRate, 0))
       targetRate = Int(max(32_000, sourceVideoRate * settings.videoBitrateRatio))
     case .manual:
       // Manual mode is a video-only bitrate. Audio is added separately and is
       // never allowed to consume the manually requested video budget.
-      targetRate = max(32, settings.videoTargetBitrateKbps) * 1_000
+      targetRate = settings.manualVideoBitrates.bitrateKbps(
+        width: width,
+        height: height,
+        frameRate: nominalFrameRate
+      ) * 1_000
     }
     let boundedTargetRate = settings.videoMaxBitrateKbps > 0
       ? min(targetRate, max(32_000, settings.videoMaxBitrateKbps * 1_000))
@@ -662,7 +668,7 @@ struct MediaCompressionEngine: Sendable {
       }
       guard measuredInputBytes > 0 else { throw CompressionError.originalSizeUnavailable }
 
-      let route = try await videoEncodingRoute(videoAsset)
+      let route = try await videoEncodingRoute(videoAsset, settings: settings)
       switch route {
       case .exportSession:
         try await exportSessionCompressor.compress(
@@ -685,9 +691,9 @@ struct MediaCompressionEngine: Sendable {
             progress: progress
           )
         } catch let error as CompressionError where error.canRetryWithExportSession {
-          // Keep the manually controlled hardware path as the default. If a
-          // track layout or sample is rejected, let Apple's compatibility path
-          // handle it rather than claiming that the source is unsupported.
+          // If a manually controlled track layout or sample is rejected, let
+          // Apple's compatibility path handle it rather than claiming that
+          // the source is unsupported.
           try await exportSessionCompressor.compress(
             asset: videoAsset,
             to: outputURL,
@@ -716,7 +722,10 @@ struct MediaCompressionEngine: Sendable {
     case exportSession
   }
 
-  private func videoEncodingRoute(_ asset: AVAsset) async throws -> VideoEncodingRoute {
+  private func videoEncodingRoute(
+    _ asset: AVAsset,
+    settings: CompressionSettings
+  ) async throws -> VideoEncodingRoute {
     let tracks = try await asset.loadTracks(withMediaType: .video)
     guard !tracks.isEmpty else {
       throw CompressionError.missingVideoTrack
@@ -753,7 +762,7 @@ struct MediaCompressionEngine: Sendable {
       }
       let hasHDR = allDescriptions.contains(where: formatDescriptionIsHDR)
       let timedMetadataTracks = (try? await asset.loadTracks(withMediaType: .metadata)) ?? []
-      if hasHDR || !timedMetadataTracks.isEmpty {
+      if settings.videoEncodingMode == .automatic || hasHDR || !timedMetadataTracks.isEmpty {
         return .exportSession
       }
       return .manualVideoToolbox
@@ -761,7 +770,7 @@ struct MediaCompressionEngine: Sendable {
     guard let unsupportedSubtype = subtypes.first(where: { !h264Subtypes.contains($0) }) else {
       let hasHDR = allDescriptions.contains(where: formatDescriptionIsHDR)
       let timedMetadataTracks = (try? await asset.loadTracks(withMediaType: .metadata)) ?? []
-      if hasHDR || !timedMetadataTracks.isEmpty {
+      if settings.videoEncodingMode == .automatic || hasHDR || !timedMetadataTracks.isEmpty {
         return .exportSession
       }
       return .manualVideoToolbox

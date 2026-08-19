@@ -15,7 +15,7 @@ struct QueueView: View {
             .foregroundStyle(.secondary)
           Text("准备队列为空")
             .font(.system(size: 16, weight: .semibold))
-          Text("压缩任务缩到角落后，可以继续选择项目并加入这里。")
+          Text("正在处理其他任务时，可以把下一批项目放在这里。")
             .font(.system(size: 11))
             .foregroundStyle(.secondary)
         }
@@ -39,7 +39,7 @@ struct QueueView: View {
       VStack(alignment: .leading, spacing: 4) {
         Text("准备队列")
           .font(.system(size: 24, weight: .semibold))
-        Text("只准备下一批；当前任务完成审核前不会开始。")
+        Text("下一批会在当前任务完成后开始。")
           .font(.system(size: 11))
           .foregroundStyle(.secondary)
         if let message = model.queueStatusMessage {
@@ -87,7 +87,7 @@ private struct QueueTaskCard: View {
           .foregroundStyle(.secondary)
         }
         Spacer()
-        Text(task.settings.summary)
+        Text(task.settings.summary(for: task.mediaKind))
           .font(.system(size: 10))
           .foregroundStyle(.secondary)
         Button {
@@ -116,12 +116,14 @@ private struct QueueTaskCard: View {
                 .frame(width: 18)
               Text(asset.displayTitle).lineLimit(1)
               Spacer()
-              if asset.isCloudOnly {
-                Image(systemName: "icloud.and.arrow.down")
+              if asset.originalAvailability != .local {
+                Image(systemName: asset.originalAvailability.symbolName)
               }
-              Text(MediaFormatting.inputBytes(for: asset))
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundStyle(.secondary)
+              if let inputBytes = MediaFormatting.inputBytes(for: asset) {
+                Text(inputBytes)
+                  .font(.system(size: 10, design: .monospaced))
+                  .foregroundStyle(.secondary)
+              }
             }
             .font(.system(size: 11))
             .padding(.horizontal, 14)
@@ -135,10 +137,13 @@ private struct QueueTaskCard: View {
   }
 
   private var queueSizeSummary: String {
-    let known = task.knownInputBytes > 0
-      ? "已知原件 \(MediaFormatting.bytes(task.knownInputBytes))"
-      : "原件大小下载后读取"
-    let cloud = task.cloudAssetCount > 0 ? " · iCloud \(task.cloudAssetCount) 个" : ""
-    return known + cloud
+    var parts: [String] = []
+    if task.knownInputBytes > 0 {
+      parts.append("文件 \(MediaFormatting.bytes(task.knownInputBytes))")
+    }
+    if task.cloudAssetCount > 0 {
+      parts.append("云端项目 \(task.cloudAssetCount) 个")
+    }
+    return parts.joined(separator: " · ")
   }
 }

@@ -36,15 +36,15 @@ enum PhotoLibraryError: LocalizedError {
   var errorDescription: String? {
     switch self {
     case .accessDenied:
-      return "PhotoSlim 没有读取和修改照片图库的权限。"
-    case .assetNotFound(let identifier):
-      return "找不到照片资产：\(identifier)"
+      return "PhotoSlim 没有访问照片图库的权限。"
+    case .assetNotFound:
+      return "找不到所选项目。"
     case .originalUnavailable(let name):
-      return "无法取得原始文件：\(name)"
-    case .photoKit(let message):
-      return message
-    case .verificationFailed(let message):
-      return "压缩副本验证失败：\(message)"
+      return "无法读取原件：\(name)"
+    case .photoKit:
+      return "照片图库操作失败，请稍后重试。"
+    case .verificationFailed:
+      return "压缩结果检查未通过，原件未修改。"
     }
   }
 }
@@ -53,6 +53,32 @@ struct ImageOriginal: Sendable {
   let data: Data
   let uniformTypeIdentifier: String
   let orientation: CGImagePropertyOrientation
+}
+
+/// Results produced only after the original resource has been materialized in
+/// the session's working directory. The URL is deliberately scoped to that
+/// directory and is removed by the task after the encode consumes it.
+struct OriginalResourceDownload: @unchecked Sendable {
+  let fileURL: URL
+  let byteCount: Int64
+  let imageOriginal: ImageOriginal?
+  let videoAsset: AVAsset?
+  let videoAnalysis: OriginalVideoAnalysis?
+}
+
+/// Facts read from the downloaded video file itself. In particular, codec
+/// classification comes from CMFormatDescription sample entries, never from
+/// a filename or a PhotoKit UTI.
+struct OriginalVideoAnalysis: Sendable {
+  let codec: String?
+  let subtypes: [FourCharCode]
+  let isHDR: Bool
+  let videoBitrate: Int64?
+  let audioBitrate: Int64?
+  let videoTrackCount: Int
+  let audioTrackCount: Int
+  let metadataItemCount: Int
+  let metadataFormats: [String]
 }
 
 struct ImportedAssetVerification: Sendable {
@@ -148,6 +174,69 @@ private final class PhotoRequestCancellation: @unchecked Sendable {
   }
 }
 
+private final class PhotoResourceRequestCancellation: @unchecked Sendable {
+  private let manager: PHAssetResourceManager
+  private let lock = NSLock()
+  private var requestID = PHInvalidAssetResourceDataRequestID
+  private var cancelled = false
+
+  init(manager: PHAssetResourceManager) {
+    self.manager = manager
+  }
+
+  func set(_ requestID: PHAssetResourceDataRequestID) {
+    lock.lock()
+    self.requestID = requestID
+    let shouldCancel = cancelled
+    lock.unlock()
+    if shouldCancel, requestID != PHInvalidAssetResourceDataRequestID {
+      manager.cancelDataRequest(requestID)
+    }
+  }
+
+  func cancel() {
+    lock.lock()
+    cancelled = true
+    let requestID = self.requestID
+    lock.unlock()
+    if requestID != PHInvalidAssetResourceDataRequestID {
+      manager.cancelDataRequest(requestID)
+    }
+  }
+}
+
+private final class ResourceFileWriter: @unchecked Sendable {
+  private let handle: FileHandle
+  private let lock = NSLock()
+  private var writeError: Error?
+
+  init(url: URL) throws {
+    guard FileManager.default.createFile(atPath: url.path, contents: nil) else {
+      throw PhotoLibraryError.photoKit("无法创建原始资源临时文件。")
+    }
+    handle = try FileHandle(forWritingTo: url)
+  }
+
+  func append(_ data: Data) {
+    lock.lock()
+    defer { lock.unlock() }
+    guard writeError == nil else { return }
+    do {
+      try handle.write(contentsOf: data)
+    } catch {
+      writeError = error
+    }
+  }
+
+  func finish(completionError: Error?) -> Error? {
+    lock.lock()
+    let error = completionError ?? writeError
+    lock.unlock()
+    try? handle.close()
+    return error
+  }
+}
+
 enum VideoCodecClassifier {
   private static let hevcSubtypes: Set<FourCharCode> = [
     kCMVideoCodecType_HEVC,
@@ -197,6 +286,7 @@ enum VideoCodecClassifier {
 
 final class PhotoLibraryService: @unchecked Sendable {
   private let imageManager = PHCachingImageManager()
+  private let resourceManager = PHAssetResourceManager.default()
   private var changeMonitor: PhotoLibraryChangeMonitor?
 
   deinit {
@@ -257,7 +347,6 @@ final class PhotoLibraryService: @unchecked Sendable {
     let cachedAssets = previousIndex.assets.map {
       refreshed(
         $0,
-        settings: settings,
         processedIdentifiers: processedIdentifiers
       )
     }
@@ -331,16 +420,16 @@ final class PhotoLibraryService: @unchecked Sendable {
       var format = formatGroup(for: asset, uti: primary?.uniformTypeIdentifier)
       var codec: String?
       var originalBytes: Int64?
-      var isCloudOnly = false
+      var originalAvailability: OriginalResourceAvailability = .unknown
 
       if asset.mediaType == .image {
         let local = await localImageInspection(for: asset, resources: resources)
         originalBytes = local.bytes
-        isCloudOnly = !local.isOriginalAvailable
+        originalAvailability = local.availability
       } else if asset.mediaType == .video {
         let local = await localVideoInspection(for: asset, resources: resources)
         originalBytes = local.bytes
-        isCloudOnly = !local.isOriginalAvailable
+        originalAvailability = local.availability
         codec = local.codec
         if local.isHDR { reasons.insert(.hdr) }
         if local.codec == "H.264" {
@@ -354,27 +443,12 @@ final class PhotoLibraryService: @unchecked Sendable {
           format = .hevc
           reasons.insert(.efficientCodec)
           reasons.remove(.codecUnverified)
-        } else if !local.isOriginalAvailable {
+        } else if originalAvailability != .local {
           reasons.insert(.codecUnverified)
-        } else if local.isOriginalAvailable {
+        } else {
           format = .other
           reasons.insert(.unsupported)
         }
-      }
-
-      let estimatedOutputBytes = originalBytes.map {
-        MediaPlanning.estimatedOutputBytes(
-          inputBytes: $0,
-          kind: asset.mediaType == .video ? .video : .photo,
-          settings: settings,
-          duration: asset.duration
-        )
-      }
-      if let originalBytes, let estimatedOutputBytes, originalBytes > 0,
-        Double(originalBytes - estimatedOutputBytes) / Double(originalBytes)
-          < settings.minimumSavingsRatio
-      {
-        reasons.insert(.lowSavings)
       }
 
       let collections = PHAssetCollection.fetchAssetCollectionsContaining(
@@ -404,12 +478,12 @@ final class PhotoLibraryService: @unchecked Sendable {
           duration: asset.duration,
           isFavorite: asset.isFavorite,
           isHidden: asset.isHidden,
-          isCloudOnly: isCloudOnly,
+          isCloudOnly: originalAvailability != .local,
+          originalAvailability: originalAvailability,
           locationLatitude: location?.coordinate.latitude,
           locationLongitude: location?.coordinate.longitude,
           locationAltitude: location?.altitude,
           originalBytes: originalBytes,
-          estimatedOutputBytes: estimatedOutputBytes,
           codec: codec,
           albumIdentifiers: albumIdentifiers,
           exclusionReasons: reasons
@@ -510,14 +584,14 @@ final class PhotoLibraryService: @unchecked Sendable {
 
   private func refreshed(
     _ asset: MediaAsset,
-    settings: CompressionSettings,
     processedIdentifiers: Set<String>
   ) -> MediaAsset {
     var result = asset
-    result.refreshPlanning(
-      settings: settings,
-      processedIdentifiers: processedIdentifiers
-    )
+    result.exclusionReasons.remove(.lowSavings)
+    result.exclusionReasons.remove(.alreadyProcessed)
+    if processedIdentifiers.contains(result.id) {
+      result.exclusionReasons.insert(.alreadyProcessed)
+    }
     return result
   }
 
@@ -577,6 +651,179 @@ final class PhotoLibraryService: @unchecked Sendable {
       if leftDate == rightDate { return $0.id < $1.id }
       return leftDate > rightDate
     }
+  }
+
+  /// Downloads exactly the primary original resource selected from
+  /// `PHAssetResource.assetResources(for:)`. Unlike `requestAVAsset`, this
+  /// gives the task a real file whose byte count can be measured after the
+  /// download and whose media format can be inspected without guessing from
+  /// a UTI or filename.
+  func downloadOriginalResource(
+    identifier: String,
+    directory: URL,
+    networkAllowed: Bool,
+    progress: (@Sendable (Double) -> Void)? = nil
+  ) async throws -> OriginalResourceDownload {
+    let asset = try fetchAsset(identifier: identifier)
+    let resources = PHAssetResource.assetResources(for: asset)
+    guard let resource = primaryResource(for: asset, resources: resources) else {
+      throw PhotoLibraryError.originalUnavailable(identifier)
+    }
+
+    try FileManager.default.createDirectory(
+      at: directory,
+      withIntermediateDirectories: true
+    )
+    let safeFilename = resource.originalFilename
+      .split(separator: "/")
+      .last
+      .map(String.init) ?? "original"
+    let fileURL = directory.appendingPathComponent(
+      "original-" + UUID().uuidString + "-" + safeFilename,
+      isDirectory: false
+    )
+
+    do {
+      try await writeResourceData(
+        resource,
+        to: fileURL,
+        networkAllowed: networkAllowed,
+        progress: progress
+      )
+      let byteCount = Int64(
+        (try fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+      )
+      guard byteCount > 0 else {
+        throw PhotoLibraryError.originalUnavailable(resource.originalFilename)
+      }
+
+      if asset.mediaType == .image {
+        let original = try imageOriginal(at: fileURL, resource: resource)
+        return OriginalResourceDownload(
+          fileURL: fileURL,
+          byteCount: byteCount,
+          imageOriginal: original,
+          videoAsset: nil,
+          videoAnalysis: nil
+        )
+      }
+
+      let videoAsset = AVURLAsset(url: fileURL)
+      let analysis = try await analyzeVideoAsset(videoAsset)
+      return OriginalResourceDownload(
+        fileURL: fileURL,
+        byteCount: byteCount,
+        imageOriginal: nil,
+        videoAsset: videoAsset,
+        videoAnalysis: analysis
+      )
+    } catch {
+      try? FileManager.default.removeItem(at: fileURL)
+      throw error
+    }
+  }
+
+  private func writeResourceData(
+    _ resource: PHAssetResource,
+    to fileURL: URL,
+    networkAllowed: Bool,
+    progress: (@Sendable (Double) -> Void)?
+  ) async throws {
+    let writer = try ResourceFileWriter(url: fileURL)
+    let options = PHAssetResourceRequestOptions()
+    options.isNetworkAccessAllowed = networkAllowed
+    options.progressHandler = { value in progress?(value) }
+    let cancellation = PhotoResourceRequestCancellation(manager: resourceManager)
+
+    do {
+      try await withTaskCancellationHandler(operation: {
+        try await withCheckedThrowingContinuation {
+          (continuation: CheckedContinuation<Void, Error>) in
+          let requestID = resourceManager.requestData(
+            for: resource,
+            options: options,
+            dataReceivedHandler: { data in
+              writer.append(data)
+            },
+            completionHandler: { error in
+              if let error = writer.finish(completionError: error) {
+                continuation.resume(throwing: error)
+              } else {
+                continuation.resume()
+              }
+            }
+          )
+          cancellation.set(requestID)
+        }
+      }, onCancel: {
+        cancellation.cancel()
+      })
+    } catch {
+      try? FileManager.default.removeItem(at: fileURL)
+      throw error
+    }
+  }
+
+  private func imageOriginal(
+    at fileURL: URL,
+    resource: PHAssetResource
+  ) throws -> ImageOriginal {
+    let data = try Data(contentsOf: fileURL, options: .mappedIfSafe)
+    guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+      CGImageSourceGetCount(source) > 0
+    else {
+      throw PhotoLibraryError.originalUnavailable(resource.originalFilename)
+    }
+    let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil)
+      as? [CFString: Any]
+    let rawOrientation = (properties?[kCGImagePropertyOrientation] as? NSNumber)?.uint32Value ?? 1
+    let orientation = CGImagePropertyOrientation(rawValue: rawOrientation) ?? .up
+    return ImageOriginal(
+      data: data,
+      uniformTypeIdentifier: resource.uniformTypeIdentifier,
+      orientation: orientation
+    )
+  }
+
+  private func analyzeVideoAsset(_ asset: AVAsset) async throws -> OriginalVideoAnalysis {
+    let videoTracks = try await asset.loadTracks(withMediaType: .video)
+    guard !videoTracks.isEmpty else { throw CompressionError.missingVideoTrack }
+    let audioTracks = try await asset.loadTracks(withMediaType: .audio)
+    var subtypes: [FourCharCode] = []
+    var isHDR = false
+    var videoBitrate = 0.0
+    var audioBitrate = 0.0
+
+    for track in videoTracks {
+      let descriptions = try await track.load(.formatDescriptions)
+      subtypes.append(contentsOf: descriptions.map(CMFormatDescriptionGetMediaSubType))
+      if descriptions.contains(where: Self.formatDescriptionIsHDR) { isHDR = true }
+      let rate = Double(try await track.load(.estimatedDataRate))
+      if rate.isFinite, rate > 0 { videoBitrate += rate }
+    }
+    for track in audioTracks {
+      let rate = Double(try await track.load(.estimatedDataRate))
+      if rate.isFinite, rate > 0 { audioBitrate += rate }
+    }
+
+    // Loading the asset-level metadata is intentional. It verifies that the
+    // source container is readable before encoding and lets the compressor
+    // copy the original global metadata into the new container.
+    let metadata = try await asset.load(.metadata)
+    let metadataFormats = try await asset.load(.availableMetadataFormats)
+      .map { String(describing: $0) }
+      .sorted()
+    return OriginalVideoAnalysis(
+      codec: VideoCodecClassifier.displayName(for: subtypes),
+      subtypes: subtypes,
+      isHDR: isHDR,
+      videoBitrate: videoBitrate > 0 ? Int64(videoBitrate.rounded()) : nil,
+      audioBitrate: audioBitrate > 0 ? Int64(audioBitrate.rounded()) : nil,
+      videoTrackCount: videoTracks.count,
+      audioTrackCount: audioTracks.count,
+      metadataItemCount: metadata.count,
+      metadataFormats: metadataFormats
+    )
   }
 
   func requestImageOriginal(
@@ -923,7 +1170,7 @@ final class PhotoLibraryService: @unchecked Sendable {
     for asset: PHAsset,
     resources: [PHAssetResource]
   ) async -> (
-    bytes: Int64?, isOriginalAvailable: Bool
+    bytes: Int64?, availability: OriginalResourceAvailability
   ) {
     let knownBytes = knownOriginalResourceBytes(for: asset, resources: resources)
     let options = PHImageRequestOptions()
@@ -932,9 +1179,18 @@ final class PhotoLibraryService: @unchecked Sendable {
     options.isNetworkAccessAllowed = false
 
     return await withCheckedContinuation { continuation in
-      imageManager.requestImageDataAndOrientation(for: asset, options: options) { data, _, _, _ in
+      imageManager.requestImageDataAndOrientation(for: asset, options: options) {
+        data, _, _, info in
+        let availability: OriginalResourceAvailability
+        if data != nil {
+          availability = .local
+        } else if (info?[PHImageResultIsInCloudKey] as? NSNumber)?.boolValue == true {
+          availability = .needsDownload
+        } else {
+          availability = .unknown
+        }
         continuation.resume(
-          returning: (data.map { Int64($0.count) } ?? knownBytes, data != nil)
+          returning: (knownBytes, availability)
         )
       }
     }
@@ -944,7 +1200,7 @@ final class PhotoLibraryService: @unchecked Sendable {
     for asset: PHAsset,
     resources: [PHAssetResource]
   ) async -> (
-    bytes: Int64?, isOriginalAvailable: Bool, codec: String?, isHDR: Bool
+    bytes: Int64?, availability: OriginalResourceAvailability, codec: String?, isHDR: Bool
   ) {
     let knownBytes = knownOriginalResourceBytes(for: asset, resources: resources)
     let options = PHVideoRequestOptions()
@@ -952,33 +1208,31 @@ final class PhotoLibraryService: @unchecked Sendable {
     options.deliveryMode = .highQualityFormat
     options.isNetworkAccessAllowed = false
 
-    let avAsset: AVAsset? = await withCheckedContinuation { continuation in
-      imageManager.requestAVAsset(forVideo: asset, options: options) { avAsset, _, _ in
-        continuation.resume(returning: avAsset)
+    let result: (asset: AVAsset?, info: [AnyHashable: Any]?) = await withCheckedContinuation {
+      continuation in
+      imageManager.requestAVAsset(forVideo: asset, options: options) { avAsset, _, info in
+        continuation.resume(returning: (avAsset, info))
       }
     }
-    guard let avAsset else { return (knownBytes, false, nil, false) }
+    let availability: OriginalResourceAvailability
+    if result.asset != nil {
+      availability = .local
+    } else if (result.info?[PHImageResultIsInCloudKey] as? NSNumber)?.boolValue == true {
+      availability = .needsDownload
+    } else {
+      availability = .unknown
+    }
+    guard let avAsset = result.asset else {
+      return (knownBytes, availability, nil, false)
+    }
     let inspection = await inspectVideoStreams(in: avAsset)
     let codec = VideoCodecClassifier.displayName(for: inspection.subtypes)
     let hdr = inspection.isHDR
-    let size: Int64?
-    let measuredSizes = inspection.sourceURLs.compactMap { url -> Int64? in
-      guard url.isFileURL,
-        let value = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize,
-        value > 0
-      else { return nil }
-      return Int64(value)
-    }
-    if let knownBytes {
-      size = knownBytes
-    } else if measuredSizes.isEmpty {
-      size = nil
-    } else {
-      size = measuredSizes.reduce(0) { total, value in
-        total > Int64.max - value ? Int64.max : total + value
-      }
-    }
-    return (size, true, codec, hdr)
+    // `dataSize` is the only scan-time byte source. A local AVAsset URL or a
+    // request's returned Data is deliberately not used as a substitute: when
+    // Photos has not reported the resource size, the browser must show it as
+    // unknown and the task will measure the real downloaded file later.
+    return (knownBytes, availability, codec, hdr)
   }
 
   private func inspectVideoStreams(in avAsset: AVAsset) async -> (
@@ -1027,7 +1281,9 @@ final class PhotoLibraryService: @unchecked Sendable {
       ? [.fullSizeVideo, .video]
       : [.fullSizePhoto, .photo]
     return preferred.compactMap { type in resources.first(where: { $0.type == type }) }.first
-      ?? resources.first
+      ?? resources.first(where: { resource in
+        preferred.contains(resource.type)
+      })
   }
 
   private func knownOriginalResourceBytes(
@@ -1035,11 +1291,16 @@ final class PhotoLibraryService: @unchecked Sendable {
     resources: [PHAssetResource]
   ) -> Int64? {
     guard #available(macOS 27.0, *) else { return nil }
-    guard let primary = primaryResource(for: asset, resources: resources),
-      let size = primary.value(forKey: "dataSize") as? NSNumber,
-      size.int64Value > 0
-    else { return nil }
-    return size.int64Value
+    guard let primary = primaryResource(for: asset, resources: resources) else { return nil }
+
+    // The current SDK used to build the macOS 14-compatible target does not
+    // declare PHAssetResource.dataSize yet. Read the runtime property by its
+    // documented name so newer Photos frameworks can provide it without
+    // making the older deployment target depend on a newer SDK declaration.
+    let value = primary.value(forKey: "dataSize")
+    let size = (value as? NSNumber)?.int64Value ?? (value as? Int).map(Int64.init)
+    guard let size, size > 0 else { return nil }
+    return size
   }
 
   private func staticExclusionReasons(
