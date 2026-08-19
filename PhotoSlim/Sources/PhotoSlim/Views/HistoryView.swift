@@ -9,7 +9,7 @@ struct HistoryView: View {
         VStack(alignment: .leading, spacing: 4) {
           Text("任务历史")
             .font(.system(size: 24, weight: .semibold))
-          Text("记录确认、撤回和失败结果，不包含文件名或位置信息。")
+          Text("这里会保留每次任务的完成结果。")
             .font(.system(size: 11))
             .foregroundStyle(.secondary)
         }

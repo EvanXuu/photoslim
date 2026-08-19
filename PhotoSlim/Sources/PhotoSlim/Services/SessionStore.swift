@@ -1,7 +1,7 @@
 import Foundation
 
 struct PersistedApplicationState: Codable, Sendable {
-  var schemaVersion: Int? = 5
+  var schemaVersion: Int? = 6
   var currentSession: CompressionSession?
   var queue: [QueuedCompressionTask]
   var history: [TaskHistoryRecord]
@@ -20,7 +20,7 @@ struct PersistedApplicationState: Codable, Sendable {
 }
 
 struct LibraryScanIndex: Codable, Sendable {
-  static let currentSchemaVersion = 2
+  static let currentSchemaVersion = 3
 
   var schemaVersion = currentSchemaVersion
   var assets: [MediaAsset]

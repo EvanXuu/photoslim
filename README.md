@@ -1,131 +1,121 @@
 # PhotoSlim
 
-原生 macOS 照片与视频压缩工具。在修改 Apple 照片图库前，PhotoSlim 会先把压缩结果保存在本机，完成格式与元数据验证，并让你逐项对比原件。
+PhotoSlim is a native macOS app for reducing the size of an Apple Photos library while keeping the original asset safe until you approve the result.
 
-> **0.1 Alpha**：这是面向小规模真实图库测试的早期版本。请先用少量、有备份的照片或视频验证流程，不要直接处理唯一副本。当前下载包使用 ad-hoc 签名且尚未公证，macOS 可能显示未知开发者警告。
+> **0.2beta** — An early release for testing with small, backed-up batches. Do not start with the only copy of important media. The downloadable app is ad-hoc signed and not notarized, so macOS may show an unidentified developer warning.
 
-[查看 Releases](https://github.com/EvanXuu/photoslim/releases) · [阅读产品需求](PRD-PhotoSlim.md) · [查看设计系统](PhotoSlim/DESIGN_SYSTEM.md)
+[简体中文](README.zh-CN.md) · [Releases](https://github.com/EvanXuu/photoslim/releases) · [Product requirements](PRD-PhotoSlim.md) · [Design system](PhotoSlim/DESIGN_SYSTEM.md)
 
-## 为什么使用 PhotoSlim
+## What it does
 
-- JPEG 转 HEIC，H.264 SDR 转 HEVC；也允许主动重压缩普通 `hvc1` HEVC 视频。
-- 只使用公开的 PhotoKit、ImageIO、AVFoundation 和 VideoToolbox 接口，不直接修改 `.photoslibrary`。
-- 下载、压缩和验证完成后先进入本地审核，不会边压缩边删除原件。
-- 写入相册后再次核对关键元数据，删除原件仍由 Photos 显示系统确认。
-- 记录已处理资产，避免同一项目被反复有损压缩。
+- Converts ordinary JPEG photos to HEIC and SDR H.264 videos to HEVC.
+- Allows ordinary `hvc1` HEVC videos to be re-encoded when you explicitly include them.
+- Uses AVAssetExportSession's automatic HEVC path by default; detailed settings expose a manual bitrate table when you need more control.
+- Reads only the size that Photos reports for an original resource. Unknown iCloud sizes are left blank instead of being guessed.
+- Downloads up to five iCloud originals at once and overlaps downloading with local compression.
+- Shows the compressed result locally before anything is written back to Photos.
+- Lets you open a result for detailed viewing and hold the backslash key to compare the original under the mouse pointer.
+- Writes the approved copy first, verifies it, and only then asks Photos to move the original to Recently Deleted.
 
-## 0.1 Alpha 已实现
+## 0.2beta highlights
 
-- 通过 PhotoKit 扫描照片、视频和收藏项目，并使用 persistent change token 增量更新索引。
-- 支持网格/列表、搜索、筛选、排序、置顶、多选和空间预检。
-- iCloud 原件最多 5 路并行下载，并与本机压缩流水线重叠；远端大小未知时不虚构估算值。
-- 图片使用 HEIC；视频使用 VideoToolbox 手动参数，并以 `AVAssetExportSession` 作为兼容回退路径。
-- 显示 iCloud 下载和压缩的独立进度；任务可最小化、排队、恢复或终止。
-- 压缩结果先保存在本机网格中；点击可进入 100%–500% 缩放预览并拖动查看细节。
-- 在结果网格中按住反斜杠 `\`，临时显示鼠标悬浮项目的原图；松开恢复压缩结果。
-- 退出或崩溃后恢复未完成会话；终止任务会清理应用管理的临时文件。
-- 独立统计页只累计已确认完成的任务，并显示本机存储空间。
+### New
 
-## 安全工作流
+- **Review before writing**: Compressed results stay in a local review grid. Users can open a result, zoom in, compare it with the original under the pointer, and only then write the approved copy to Photos.
+- **Parallel iCloud downloads**: Up to five originals can download at the same time while local compression continues.
+- **`hvc1` HEVC re-encoding**: Ordinary `hvc1` HEVC videos can be explicitly selected for another HEVC pass. Dolby Vision, HDR, `hev1`, HEVC Alpha, and mixed tracks remain conservatively excluded.
+- **Automatic video export**: AVAssetExportSession's automatic HEVC path is now the default. Manual mode exposes an editable bitrate table for 1080p, 2160p, and 4320p at 30 and 60 fps.
+- **Native window context**: The window title shows the current media type and the subtitle shows the item count, without an extra title bubble in the toolbar.
 
-```text
-选择项目
-   |
-   v
-空间预检 -> 最多 5 路 iCloud 下载 -> 本机压缩 -> 文件验证
-                                          |
-                                          v
-                                  本地结果网格预览
-                                      /       \
-                                     v         v
-                              撤回并清理    确认写入相册
-                                                  |
-                                                  v
-                                      PhotoKit 创建/验证副本
-                                                  |
-                                                  v
-                                      Photos 系统确认删除原件
-```
+### Improvements
 
-“确认删除原件”通过 `PHAssetChangeRequest.deleteAssets` 把原件移到“最近删除”。PhotoSlim 不会清空“最近删除”，也不会绕过 Photos 的系统确认。审核阶段选择“撤回压缩副本”只会清理本地临时结果，原件保持不动。
+- Scan and selection no longer show speculative output-size or savings estimates. Real savings are recorded only after a real output has been produced and verified.
+- The safety threshold defaults to 8% for new or untouched legacy settings.
+- Incremental library scans, search, filters, sorting, pinning, list/grid views, queue recovery, statistics, and task history are preserved across sessions.
+- User-facing messages describe the action, risk, and next step without exposing implementation details.
 
-## 支持范围
+### Fixes
 
-| 输入 | 输出 | 0.1 Alpha 状态 |
-|---|---|---|
-| 普通 JPEG | HEIC | 支持，验证尺寸与输出可解码性 |
-| H.264 SDR 视频 | HEVC | 支持，手动码率或源文件比例 |
-| 普通 `hvc1` HEVC | HEVC | 支持主动重压缩，并检查最低节省比例 |
-| `hev1`、Dolby Vision、HDR、HEVC Alpha、混合轨道 | — | 默认排除 |
-| iCloud 编码未知的视频 | 下载后确认 | 下载前显示为“编码待确认” |
+- Before/After keyboard comparison follows the item under the pointer and no longer sends a key-beep when no text field is focused.
+- Compressed results open in a zoomable detail view.
+- Search, title, and toolbar presentation use one native macOS treatment instead of stacked legacy controls.
 
-PhotoSlim 会尽可能复制并验证拍摄日期、位置、收藏、隐藏状态、普通相簿关系和常见媒体元数据。由于 PhotoKit 公开 API 的限制，新建资产的添加日期和资产 ID 会变化；可逆编辑历史及人物关系不会复制。
+## Safe workflow
 
-## 下载与安装
+1. Select assets.
+2. Check local space, download up to five iCloud originals, compress, and verify the files.
+3. Review the generated results locally. You may undo and clean up, or approve the write.
+4. PhotoSlim creates and verifies the Photos copy.
+5. Photos asks for confirmation before the original is moved to Recently Deleted.
 
-1. 从 [GitHub Releases](https://github.com/EvanXuu/photoslim/releases) 下载 `PhotoSlim-0.1.0-alpha.1-macos.zip`。
-2. 解压后把 `PhotoSlim.app` 移到 `/Applications`。
-3. 首次启动时授予照片图库访问权限，并先用少量测试资产验证完整流程。
+PhotoSlim does not edit the `.photoslibrary` package directly. It uses public PhotoKit, ImageIO, AVFoundation, and VideoToolbox APIs. The original remains untouched during scanning, downloading, compression, and review.
 
-当前 Alpha 包使用 ad-hoc 签名且未经过 Apple 公证。macOS 可能阻止直接双击启动；如果你不信任预编译包，请检查源码并按下方步骤自行构建。稳定保留照片权限需要使用同一个 Apple Development 或 Developer ID 证书构建，仅保持 bundle ID 不足以保证 TCC 授权不重新询问。
+## Supported scope
 
-## 系统要求
+| Input | Output | Status in 0.2beta |
+| --- | --- | --- |
+| Ordinary JPEG | HEIC | Supported; dimensions and decodability are verified |
+| SDR H.264 video | HEVC | Supported; automatic export is the default |
+| Ordinary `hvc1` HEVC video | HEVC | Supported as an explicit re-encode option |
+| `hev1`, Dolby Vision, HDR, HEVC Alpha, mixed tracks | — | Conservatively excluded |
+| iCloud video with unknown encoding | — | Encoding is confirmed after the original is downloaded |
 
-- macOS 14 或更高版本。
-- 可读取和写入的 Apple 照片图库权限。
-- 足够容纳所选 iCloud 原件、临时输出和安全余量的本机空间。
-- 从源码构建需要 Xcode Command Line Tools 和 Swift 6 工具链。
+PhotoSlim copies and verifies the metadata that PhotoKit exposes for the new asset, including capture date, location, favorite state, hidden state, and ordinary album membership where supported. A newly created Photos asset necessarily receives a new asset identifier and add date; edit history and face/person relationships are not copied.
 
-## 从源码构建
+## Download and install
 
-调试构建：
+1. Download `PhotoSlim-0.2beta-macos.zip` from the [0.2beta release](https://github.com/EvanXuu/photoslim/releases/tag/v0.2beta).
+2. Unzip it and move `PhotoSlim.app` to `/Applications`.
+3. Grant Photos access on first launch and begin with a small test batch.
 
-```bash
-CLANG_MODULE_CACHE_PATH=/private/tmp/photoslim-module-cache \
-  xcrun swift build --disable-sandbox \
-  --package-path PhotoSlim \
-  --scratch-path /private/tmp/photoslim-build
-```
+The prebuilt app is ad-hoc signed and not notarized. If macOS blocks the first launch, use **Open** from Finder's context menu after checking that the package came from this repository. A stable Apple Development or Developer ID signature is required to preserve Photos permission across binary updates; keeping the same bundle identifier alone is not sufficient for TCC identity.
 
-测试：
+## Requirements
 
-```bash
-CLANG_MODULE_CACHE_PATH=/private/tmp/photoslim-test-module-cache \
-  xcrun swift test --disable-sandbox \
-  --package-path PhotoSlim \
-  --scratch-path /private/tmp/photoslim-test-build
-```
+- macOS 14 or later.
+- Permission to read and add to the Apple Photos library.
+- Enough local space for selected iCloud originals, temporary outputs, and the safety margin.
+- Xcode Command Line Tools and a Swift 6 toolchain for source builds.
 
-生成 `.app` 和便携 ZIP：
+## Build and test from source
 
-```bash
+Debug build:
+
+~~~
+xcrun swift build --disable-sandbox --package-path PhotoSlim --scratch-path /private/tmp/photoslim-build
+~~~
+
+Tests:
+
+~~~
+xcrun swift test --disable-sandbox --package-path PhotoSlim --scratch-path /private/tmp/photoslim-test-build
+~~~
+
+Build a portable app and ZIP:
+
+~~~
 PhotoSlim/Scripts/build-app.sh
-```
+~~~
 
-默认输出到 `PhotoSlim/build/PhotoSlim.app` 和 `PhotoSlim/build/PhotoSlim.app.zip`。使用稳定证书签名：
+The default output is `PhotoSlim/build/PhotoSlim.app` and `PhotoSlim/build/PhotoSlim.app.zip`. To use a stable signing identity, set `PHOTOSLIM_SIGNING_IDENTITY` before running the script.
 
-```bash
-PHOTOSLIM_SIGNING_IDENTITY="Apple Development: Your Name (TEAMID)" \
-  PhotoSlim/Scripts/build-app.sh
-```
+## Project structure
 
-## 项目结构
-
-```text
+~~~
 PhotoSlim/
 |-- Sources/PhotoSlim/
-|   |-- App/       AppModel、恢复与任务状态机
-|   |-- Models/    资产、筛选、设置、会话和统计
-|   |-- Services/  PhotoKit、压缩、磁盘预检和会话账本
-|   |-- Theme/     颜色、间距和可复用样式
-|   `-- Views/     浏览、任务、审核、队列、统计和历史
-|-- Tests/         纯逻辑与程序生成媒体的编码测试
-|-- Resources/     Info.plist、权限 entitlement 与 App Icon
-`-- Scripts/       Release 打包与图标生成脚本
-```
+|   |-- App/       App model, recovery, and task state
+|   |-- Models/    Assets, filters, settings, sessions, and statistics
+|   |-- Services/  PhotoKit, compression, disk checks, and persistence
+|   |-- Theme/     Colors, spacing, and reusable styles
+|   `-- Views/     Browser, task, review, queue, statistics, and history UI
+|-- Tests/         Pure logic and generated-media encoding tests
+|-- Resources/     Info.plist, entitlements, and app icon
+`-- Scripts/       App packaging and icon generation
+~~~
 
-运行真实 PhotoKit 创建/删除流程会修改照片图库，因此自动化测试不会启动应用或删除真实资产，只覆盖纯逻辑、持久化和程序生成的临时媒体。
+Real PhotoKit create/delete flows are not run by automated tests because they would modify a user's library. Tests cover pure logic, persistence, and generated temporary media instead.
 
-## 隐私与许可证
+## Privacy and license
 
-PhotoSlim 不包含遥测或云端服务，媒体处理在本机完成；只有 Photos/iCloud 自身可能产生网络流量。本仓库目前未附带开源许可证，源码公开用于审阅，但默认保留所有权利。
+PhotoSlim has no telemetry or cloud service. Media processing happens locally; Photos and iCloud may perform their own network operations. This repository currently has no open-source license, so the source is available for review but remains all rights reserved by default.

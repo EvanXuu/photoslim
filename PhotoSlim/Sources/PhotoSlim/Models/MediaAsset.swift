@@ -35,6 +35,36 @@ enum MediaFormatGroup: String, Codable, CaseIterable, Identifiable, Sendable {
   }
 }
 
+/// Availability of the original PhotoKit resource on the current Mac.
+///
+/// `isCloudOnly` is kept on `MediaAsset` for compatibility with older session
+/// ledgers. This value carries the extra distinction needed by the scanner:
+/// an asset can be known to require an iCloud download, or PhotoKit can fail to
+/// answer without telling us why.
+enum OriginalResourceAvailability: String, Codable, CaseIterable, Identifiable, Sendable {
+  case local
+  case needsDownload
+  case unknown
+
+  var id: String { rawValue }
+
+  var title: String {
+    switch self {
+    case .local: return "本地可用"
+    case .needsDownload: return "需要 iCloud 下载"
+    case .unknown: return "状态未知"
+    }
+  }
+
+  var symbolName: String {
+    switch self {
+    case .local: return "externaldrive.fill"
+    case .needsDownload: return "icloud.and.arrow.down"
+    case .unknown: return "questionmark.icloud"
+    }
+  }
+}
+
 enum ExclusionReason: String, Codable, CaseIterable, Identifiable, Hashable, Sendable {
   case alreadyProcessed
   case efficientCodec
@@ -57,7 +87,7 @@ enum ExclusionReason: String, Codable, CaseIterable, Identifiable, Hashable, Sen
   var title: String {
     switch self {
     case .alreadyProcessed: return "已经由 PhotoSlim 处理"
-    case .efficientCodec: return "已是高效编码"
+    case .efficientCodec: return "已经是高效格式"
     case .edited: return "已编辑资产"
     case .raw: return "RAW / ProRAW"
     case .livePhoto: return "Live Photo"
@@ -68,8 +98,8 @@ enum ExclusionReason: String, Codable, CaseIterable, Identifiable, Hashable, Sen
     case .hidden: return "隐藏媒体"
     case .transparencyOrAnimation: return "透明或动画图片"
     case .screenRecording: return "屏幕录制"
-    case .lowSavings: return "节省不足"
-    case .codecUnverified: return "编码待下载确认"
+    case .lowSavings: return "旧版节省标记"
+    case .codecUnverified: return "格式待确认"
     case .unsupported: return "暂不支持"
     }
   }
@@ -79,15 +109,15 @@ enum ExclusionReason: String, Codable, CaseIterable, Identifiable, Hashable, Sen
     case .alreadyProcessed:
       return "这个项目已经出现在已确认完成的 PhotoSlim 任务中。为避免重复有损压缩，它只能查看，不能再次加入任务。"
     case .efficientCodec:
-      return "这些项目已经使用 HEIC 或 HEVC。再次有损压缩通常收益很小，且会累积画质损失。"
+      return "这些项目已经使用较新的格式，再压缩通常收益很小，还可能降低画质。"
     case .edited:
-      return "公开 PhotoKit 不能复制可逆编辑历史。首版只展示这些项目，不会处理。"
+      return "已编辑的项目可能无法完整保留调整内容，暂不处理。"
     case .raw:
       return "RAW 和 ProRAW 是数字底片。首版不会压缩或替换它们。"
     case .livePhoto:
       return "Live Photo 包含配对照片和视频。首版不会拆分或替换它们。"
     case .hdr:
-      return "HDR 或 Dolby Vision 的色彩和动态元数据可能无法完整保留。首版不会处理。"
+      return "HDR 或 Dolby Vision 的颜色信息可能无法完整保留，暂不处理。"
     case .highFrameRate:
       return "慢动作和高帧率视频包含特殊时间关系。首版不会处理。"
     case .cinematic:
@@ -101,11 +131,11 @@ enum ExclusionReason: String, Codable, CaseIterable, Identifiable, Hashable, Sen
     case .screenRecording:
       return "屏幕录制中的细小文字和界面边缘对压缩更敏感。确认后可以处理。"
     case .lowSavings:
-      return "预计节省低于当前阈值，转换可能不值得。你可以显示这些项目再单独决定。"
+      return "这是旧记录中的项目，当前不会用它限制处理。"
     case .codecUnverified:
-      return "这个视频的原件目前只在 iCloud 中。公开 PhotoKit 无法在不下载原件的情况下确认它是 H.264 还是 HEVC；下载后仍会强制验证，已经是 HEVC 的视频会安全跳过。"
+      return "项目尚未下载到本机，格式需要下载后才能确认。"
     case .unsupported:
-      return "当前版本无法安全验证这种媒体。显示它不会解除处理限制。"
+      return "暂时无法安全处理这个项目。"
     }
   }
 
@@ -119,7 +149,7 @@ enum ExclusionReason: String, Codable, CaseIterable, Identifiable, Hashable, Sen
     }
   }
 
-  static let defaultExcluded = Set(Self.allCases).subtracting([.codecUnverified])
+  static let defaultExcluded = Set(Self.allCases).subtracting([.codecUnverified, .lowSavings])
 }
 
 struct MediaAsset: Identifiable, Codable, Hashable, Sendable {
@@ -136,11 +166,11 @@ struct MediaAsset: Identifiable, Codable, Hashable, Sendable {
   var isFavorite: Bool
   var isHidden: Bool
   var isCloudOnly: Bool
+  var originalAvailability: OriginalResourceAvailability = .local
   var locationLatitude: Double? = nil
   var locationLongitude: Double? = nil
   var locationAltitude: Double? = nil
   var originalBytes: Int64?
-  var estimatedOutputBytes: Int64?
   var codec: String?
   var albumIdentifiers: [String]
   var exclusionReasons: Set<ExclusionReason>
@@ -148,28 +178,11 @@ struct MediaAsset: Identifiable, Codable, Hashable, Sendable {
   /// changes processing eligibility or the PhotoKit asset itself.
   var isPinned: Bool = false
 
-  var estimatedSavingsBytes: Int64? {
-    guard let originalBytes, let estimatedOutputBytes else { return nil }
-    return max(0, originalBytes - estimatedOutputBytes)
-  }
-
-  var estimatedSavingsRatio: Double? {
-    guard let originalBytes, originalBytes > 0, let estimatedSavingsBytes else { return nil }
-    return Double(estimatedSavingsBytes) / Double(originalBytes)
-  }
-
   var inputBytesForPlanning: Int64 {
     // PhotoKit does not expose a reliable remote-original byte count before
     // the resource is downloaded. Zero is intentional: callers must render
     // the value as unknown instead of inventing a size estimate.
     originalBytes ?? 0
-  }
-
-  var outputBytesForPlanning: Int64 {
-    // A cloud-only item has no preflight output estimate either. Its source
-    // and output sizes are measured after the download and encode complete.
-    guard originalBytes != nil else { return 0 }
-    return estimatedOutputBytes ?? 0
   }
 
   var canProcess: Bool {
@@ -191,37 +204,6 @@ struct MediaAsset: Identifiable, Codable, Hashable, Sendable {
     pixelWidth > 0 && pixelHeight > 0 ? "\(pixelWidth) × \(pixelHeight)" : "尺寸未知"
   }
 
-  mutating func refreshPlanning(
-    settings: CompressionSettings,
-    processedIdentifiers: Set<String>
-  ) {
-    exclusionReasons.remove(.lowSavings)
-    exclusionReasons.remove(.alreadyProcessed)
-
-    if processedIdentifiers.contains(id) {
-      exclusionReasons.insert(.alreadyProcessed)
-    }
-
-    guard let inputBytes = originalBytes, inputBytes > 0 else {
-      // Do not calculate or persist a synthetic cloud size. The low-savings
-      // exclusion is decided only after the real resource has been downloaded.
-      estimatedOutputBytes = nil
-      return
-    }
-
-    let outputBytes = MediaPlanning.estimatedOutputBytes(
-      inputBytes: inputBytes,
-      kind: kind,
-      settings: settings,
-      duration: duration
-    )
-    estimatedOutputBytes = outputBytes
-    if Double(max(0, inputBytes - outputBytes)) / Double(inputBytes)
-      < settings.minimumSavingsRatio
-    {
-      exclusionReasons.insert(.lowSavings)
-    }
-  }
 }
 
 extension MediaAsset {
@@ -239,11 +221,11 @@ extension MediaAsset {
     case isFavorite
     case isHidden
     case isCloudOnly
+    case originalAvailability
     case locationLatitude
     case locationLongitude
     case locationAltitude
     case originalBytes
-    case estimatedOutputBytes
     case codec
     case albumIdentifiers
     case exclusionReasons
@@ -268,11 +250,14 @@ extension MediaAsset {
     isFavorite = try container.decode(Bool.self, forKey: .isFavorite)
     isHidden = try container.decode(Bool.self, forKey: .isHidden)
     isCloudOnly = try container.decode(Bool.self, forKey: .isCloudOnly)
+    originalAvailability = try container.decodeIfPresent(
+      OriginalResourceAvailability.self,
+      forKey: .originalAvailability
+    ) ?? (isCloudOnly ? .needsDownload : .local)
     locationLatitude = try container.decodeIfPresent(Double.self, forKey: .locationLatitude)
     locationLongitude = try container.decodeIfPresent(Double.self, forKey: .locationLongitude)
     locationAltitude = try container.decodeIfPresent(Double.self, forKey: .locationAltitude)
     originalBytes = try container.decodeIfPresent(Int64.self, forKey: .originalBytes)
-    estimatedOutputBytes = try container.decodeIfPresent(Int64.self, forKey: .estimatedOutputBytes)
     codec = try container.decodeIfPresent(String.self, forKey: .codec)
     albumIdentifiers = try container.decode([String].self, forKey: .albumIdentifiers)
     exclusionReasons = try container.decode(Set<ExclusionReason>.self, forKey: .exclusionReasons)
@@ -300,35 +285,4 @@ enum MediaDimensionMatcher {
       && abs(outputHeight - sourceWidth) <= allowed
     return directMatch || rotatedMatch
   }
-}
-
-enum MediaPlanning {
-  static func estimatedOutputBytes(
-    inputBytes: Int64,
-    kind: MediaKind,
-    settings: CompressionSettings,
-    duration: Double = 0
-  ) -> Int64 {
-    switch kind {
-    case .photo:
-      let ratio = max(0.28, min(0.92, settings.photoQuality * 0.68))
-      return max(1, Int64(Double(max(1, inputBytes)) * ratio))
-    case .video:
-      if settings.videoBitrateMode == .manual {
-        let seconds = max(1, duration)
-        let videoBits = Double(max(32, settings.videoTargetBitrateKbps) * 1_000) * seconds
-        let audioRate =
-          settings.audioPolicy == .aac
-          ? Double(max(32_000, settings.aacBitrate))
-          : 128_000
-        let mediaBytes = (videoBits + audioRate * seconds) / 8
-        // Include a small container/keyframe allowance; this is a planning
-        // estimate, not a promise about the final MOV size.
-        return max(1, Int64(mediaBytes * 1.05))
-      }
-      let ratio = max(0.25, min(0.90, settings.videoBitrateRatio))
-      return max(1, Int64(Double(max(1, inputBytes)) * ratio))
-    }
-  }
-
 }

@@ -19,13 +19,18 @@ struct DiskSpaceReport: Equatable, Sendable {
   /// exposed the original resource. Unknown cloud assets are never estimated.
   let knownCloudDownloadBytes: Int64
   let unknownCloudAssetCount: Int
-  /// Output planning is exact only for assets whose input bytes are known.
-  let knownOutputBytes: Int64
+  /// Headroom for temporary downloads, encode output, and container overhead.
+  /// This is a storage safety margin, not a predicted output or savings value.
   let safetyMarginBytes: Int64
   let availableBytes: Int64
 
   var requiredBytes: Int64 {
-    knownCloudDownloadBytes + knownOutputBytes + safetyMarginBytes
+    let (transient, transientOverflow) = knownLocalInputBytes.addingReportingOverflow(
+      max(0, knownCloudDownloadBytes)
+    )
+    if transientOverflow { return Int64.max }
+    let (required, requiredOverflow) = transient.addingReportingOverflow(max(0, safetyMarginBytes))
+    return requiredOverflow ? Int64.max : required
   }
 
   var hasEnoughSpace: Bool { availableBytes >= requiredBytes }
@@ -75,14 +80,12 @@ enum DiskCapacityService {
       .compactMap(\.originalBytes)
       .reduce(0, saturatedAdd)
     let unknownCloudCount = assets.filter { $0.isCloudOnly && $0.originalBytes == nil }.count
-    let output = assets.reduce(0) { saturatedAdd($0, $1.outputBytesForPlanning) }
-    let transient = saturatedAdd(cloud, output)
+    let transient = saturatedAdd(knownLocal, cloud)
     let safety = safetyMargin(for: transient)
     return DiskSpaceReport(
       knownLocalInputBytes: knownLocal,
       knownCloudDownloadBytes: cloud,
       unknownCloudAssetCount: unknownCloudCount,
-      knownOutputBytes: output,
       safetyMarginBytes: safety,
       availableBytes: availableBytes
     )
@@ -98,8 +101,6 @@ enum DiskCapacityService {
     var knownLocal: Int64 = 0
     var cloud: Int64 = 0
     var unknownCloudCount = 0
-    var output: Int64 = 0
-
     for asset in orderedAssets where seen.insert(asset.id).inserted {
       let nextKnown =
         asset.isCloudOnly
@@ -111,8 +112,7 @@ enum DiskCapacityService {
       let nextUnknownCloudCount = asset.isCloudOnly && asset.originalBytes == nil
         ? unknownCloudCount + 1
         : unknownCloudCount
-      let nextOutput = saturatedAdd(output, asset.outputBytesForPlanning)
-      let transient = saturatedAdd(nextCloud, nextOutput)
+      let transient = saturatedAdd(nextKnown, nextCloud)
       let required = saturatedAdd(transient, safetyMargin(for: transient))
 
       if required <= max(0, availableBytes) {
@@ -120,18 +120,16 @@ enum DiskCapacityService {
         knownLocal = nextKnown
         cloud = nextCloud
         unknownCloudCount = nextUnknownCloudCount
-        output = nextOutput
       } else {
         rejected.append(asset)
       }
     }
 
-    let transient = saturatedAdd(cloud, output)
+    let transient = saturatedAdd(knownLocal, cloud)
     let report = DiskSpaceReport(
       knownLocalInputBytes: knownLocal,
       knownCloudDownloadBytes: cloud,
       unknownCloudAssetCount: unknownCloudCount,
-      knownOutputBytes: output,
       safetyMarginBytes: safetyMargin(for: transient),
       availableBytes: max(0, availableBytes)
     )

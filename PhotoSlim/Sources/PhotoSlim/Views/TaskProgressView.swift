@@ -10,7 +10,7 @@ struct TaskProgressView: View {
           Text("正在准备压缩副本")
             .font(.system(size: 25, weight: .semibold))
             .foregroundStyle(PhotoSlimTheme.ink)
-          Text("任务结束后先在本地预览；确认后才写入相册并删除原件。")
+          Text("完成后先预览，确认后才写入相册。")
             .font(.system(size: 12))
             .foregroundStyle(.secondary)
         }
@@ -32,8 +32,8 @@ struct TaskProgressView: View {
         .buttonStyle(.borderless)
         .foregroundStyle(PhotoSlimTheme.danger)
         .font(.system(size: 14, weight: .medium))
-        .help("终止任务并清理临时文件")
-        .accessibilityLabel("终止任务并清理临时文件")
+        .help("停止任务")
+        .accessibilityLabel("停止任务")
       }
       .padding(24)
 
@@ -66,6 +66,20 @@ struct TaskProgressView: View {
       ProgressView(value: session.progress)
         .progressViewStyle(.linear)
         .tint(PhotoSlimTheme.signal)
+      HStack(spacing: 12) {
+        if session.originalBytes > 0 {
+          Text("已处理 " + MediaFormatting.bytes(session.originalBytes))
+        }
+        if session.outputBytes > 0 {
+          Text("结果 " + MediaFormatting.bytes(session.outputBytes))
+        }
+        if let storage = model.localStorageReport {
+          Spacer(minLength: 4)
+          Text("本机可用 " + MediaFormatting.bytes(storage.availableBytes))
+        }
+      }
+      .font(.system(size: 10, design: .monospaced))
+      .foregroundStyle(.secondary)
       HStack {
         Text("\(session.completedItemCount) / \(session.items.count) 个项目完成")
         Spacer()
@@ -87,11 +101,7 @@ struct TaskProgressView: View {
           Text(item.source.displayTitle)
             .font(.system(size: 13, weight: .semibold))
             .lineLimit(1)
-          Text(
-            "\(item.source.format.title)"
-              + (item.source.isPlainHVC1 ? " · HEVC→HEVC" : "")
-              + " · \(MediaFormatting.inputBytes(for: item.source))"
-          )
+          Text(itemSummary(for: item.source))
             .font(.system(size: 10))
             .foregroundStyle(.secondary)
         }
@@ -102,14 +112,13 @@ struct TaskProgressView: View {
       }
 
       progressLine(
-        title: item.source.isCloudOnly ? "iCloud 下载" : "本地原件",
-        symbol: item.source.isCloudOnly
-          ? "icloud.and.arrow.down" : "externaldrive.fill.badge.checkmark",
+        title: downloadTitle(for: item.source),
+        symbol: downloadSymbol(for: item.source),
         value: item.downloadProgress,
-        detail: item.source.isCloudOnly ? "\(Int(item.downloadProgress * 100))%" : "已就绪"
+        detail: downloadDetail(for: item)
       )
       progressLine(
-        title: "HE\(item.source.kind == .photo ? "IC" : "VC") 压缩",
+        title: item.source.kind == .photo ? "照片压缩" : "视频压缩",
         symbol: "gearshape.2",
         value: item.compressionProgress,
         detail: "\(Int(item.compressionProgress * 100))%"
@@ -121,6 +130,38 @@ struct TaskProgressView: View {
     .overlay {
       RoundedRectangle(cornerRadius: PhotoSlimTheme.panelRadius, style: .continuous)
         .stroke(PhotoSlimTheme.signal.opacity(0.28))
+    }
+  }
+
+  private func itemSummary(for asset: MediaAsset) -> String {
+    var summary = asset.format.title
+    if asset.isPlainHVC1 { summary += " · 再次压缩" }
+    if let inputBytes = MediaFormatting.inputBytes(for: asset) {
+      summary += " · \(inputBytes)"
+    }
+    return summary
+  }
+
+  private func downloadTitle(for asset: MediaAsset) -> String {
+    switch asset.originalAvailability {
+    case .local: return "本地原件"
+    case .needsDownload: return "下载原件"
+    case .unknown: return "准备原件"
+    }
+  }
+
+  private func downloadSymbol(for asset: MediaAsset) -> String {
+    switch asset.originalAvailability {
+    case .local: return "externaldrive.fill.badge.checkmark"
+    case .needsDownload: return "icloud.and.arrow.down"
+    case .unknown: return "questionmark.icloud"
+    }
+  }
+
+  private func downloadDetail(for item: TaskItemRecord) -> String {
+    switch item.source.originalAvailability {
+    case .local: return "已就绪"
+    case .needsDownload, .unknown: return "\(Int(item.downloadProgress * 100))%"
     }
   }
 

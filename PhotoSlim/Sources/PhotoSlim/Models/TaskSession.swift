@@ -42,7 +42,7 @@ enum TaskItemState: String, Codable, Sendable {
     case .fileVerified: return "预览就绪"
     case .importing: return "正在导入"
     case .imported: return "已导入"
-    case .metadataVerified: return "元数据已验证"
+    case .metadataVerified: return "信息已检查"
     case .reviewPending: return "等待审核"
     case .committing: return "正在写入并删除原件"
     case .committed: return "已写入相册"
@@ -112,7 +112,10 @@ struct QueuedCompressionTask: Identifiable, Codable, Sendable {
     assets.filter(\.isCloudOnly).count
   }
 
-  var estimatedInputBytes: Int64 { knownInputBytes }
+  var mediaKind: MediaKind? {
+    let kinds = Set(assets.map(\.kind))
+    return kinds.count == 1 ? kinds.first : nil
+  }
 
   var cloudDownloadBytes: Int64 {
     assets.filter(\.isCloudOnly).compactMap(\.originalBytes).reduce(0, +)
@@ -177,6 +180,11 @@ struct CompressionSession: Identifiable, Codable, Sendable {
   }
 
   var verifiedSavedBytes: Int64 { max(0, verifiedOriginalBytes - verifiedOutputBytes) }
+
+  var mediaKind: MediaKind? {
+    let kinds = Set(items.map { $0.source.kind })
+    return kinds.count == 1 ? kinds.first : nil
+  }
 }
 
 struct TaskHistoryRecord: Identifiable, Codable, Sendable {

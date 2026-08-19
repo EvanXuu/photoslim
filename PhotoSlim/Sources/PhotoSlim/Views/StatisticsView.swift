@@ -13,7 +13,7 @@ struct StatisticsView: View {
         VStack(alignment: .leading, spacing: 4) {
           Text("已节省空间")
             .font(.system(size: 24, weight: .semibold))
-          Text("只统计已经确认删除原件的任务。撤回和失败任务不会计入。")
+          Text("只统计已确认完成的任务；撤回和失败的任务不会计入。")
             .font(.system(size: 11))
             .foregroundStyle(.secondary)
         }
@@ -48,7 +48,7 @@ struct StatisticsView: View {
         VStack(alignment: .leading, spacing: 3) {
           Text("本机存储空间")
             .font(.system(size: 13, weight: .semibold))
-            Text("本地项目可在选择时预检；iCloud 原件大小不估算，任务下载后按实际字节核对。")
+            Text("显示本机空间状态；云端项目会在处理时确认大小。")
             .font(.system(size: 10))
             .foregroundStyle(.secondary)
         }
@@ -74,13 +74,13 @@ struct StatisticsView: View {
 
         if storage.reclaimableBytes > 0 {
           Text(
-            "“可用于任务”比“立即可用”多 \(MediaFormatting.bytes(storage.reclaimableBytes))，这部分是 macOS 可按需清理的空间。"
+            "系统可按需释放 \(MediaFormatting.bytes(storage.reclaimableBytes)) 空间，可用于任务。"
           )
           .font(.system(size: 9))
           .foregroundStyle(.secondary)
         }
-      } else if let error = model.storageStatusError {
-        Label("无法读取本机存储空间：\(error)", systemImage: "externaldrive.badge.exclamationmark")
+      } else if model.storageStatusError != nil {
+        Label("无法读取本机存储空间，请稍后重试。", systemImage: "externaldrive.badge.exclamationmark")
           .font(.system(size: 10))
           .foregroundStyle(PhotoSlimTheme.danger)
       } else {
@@ -187,7 +187,7 @@ struct StatisticsView: View {
         Text("按任务")
           .font(.system(size: 12, weight: .semibold))
         Spacer()
-        Text("节省比例以任务原件总量计算")
+        Text("节省比例按实际结果计算")
           .font(.system(size: 9))
           .foregroundStyle(.secondary)
       }

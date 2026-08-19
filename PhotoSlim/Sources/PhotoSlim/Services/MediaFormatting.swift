@@ -44,8 +44,8 @@ enum MediaFormatting {
     return "\(Int((value * 100).rounded()))%"
   }
 
-  static func inputBytes(for asset: MediaAsset) -> String {
-    if let originalBytes = asset.originalBytes { return bytes(originalBytes) }
-    return asset.isCloudOnly ? "下载后读取" : "大小未知"
+  static func inputBytes(for asset: MediaAsset) -> String? {
+    guard let originalBytes = asset.originalBytes, originalBytes > 0 else { return nil }
+    return bytes(originalBytes)
   }
 }

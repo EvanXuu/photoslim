@@ -75,7 +75,7 @@ struct FilterPopoverView: View {
                 .font(.system(size: 10))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-              ForEach(ExclusionReason.allCases) { reason in
+              ForEach(ExclusionReason.allCases.filter { $0 != .lowSavings }) { reason in
                 Toggle(isOn: exclusionBinding(reason)) {
                   HStack(spacing: 6) {
                     Text(reason.title)

@@ -71,6 +71,8 @@ enum CloudFilter: String, Codable, CaseIterable, Identifiable, Sendable {
 }
 
 enum SortOption: String, Codable, CaseIterable, Identifiable, Sendable {
+  // Kept for decoding old preferences. They are intentionally not shown or
+  // evaluated because scan-time savings estimates no longer exist.
   case savingsLargest
   case savingsPercent
   case sizeLargest
@@ -83,13 +85,20 @@ enum SortOption: String, Codable, CaseIterable, Identifiable, Sendable {
 
   var title: String {
     switch self {
-    case .savingsLargest: return "预计节省空间"
-    case .savingsPercent: return "预计节省比例"
+    case .savingsLargest: return "旧版排序（已停用）"
+    case .savingsPercent: return "旧版比例排序（已停用）"
     case .sizeLargest: return "原文件大小"
     case .dateNewest: return "拍摄日期（新到旧）"
     case .dateOldest: return "拍摄日期（旧到新）"
     case .durationLongest: return "时长"
     case .filename: return "文件名"
+    }
+  }
+
+  var isVisible: Bool {
+    switch self {
+    case .savingsLargest, .savingsPercent: return false
+    case .sizeLargest, .dateNewest, .dateOldest, .durationLongest, .filename: return true
     }
   }
 }
@@ -113,7 +122,7 @@ struct BrowserFilter: Codable, Equatable, Sendable {
   var customMaximumBytes: Int64?
   var cloudFilter: CloudFilter = .all
   var excludedReasons = ExclusionReason.defaultExcluded
-  var sortOption: SortOption = .savingsLargest
+  var sortOption: SortOption = .sizeLargest
   var layoutMode: BrowserLayoutMode = .grid
 }
 
@@ -193,13 +202,9 @@ enum MediaQueryEngine {
       if lhs.isPinned != rhs.isPinned { return lhs.isPinned }
 
       switch filter.sortOption {
-      case .savingsLargest:
-        let left = lhs.estimatedSavingsBytes ?? -1
-        let right = rhs.estimatedSavingsBytes ?? -1
-        if left != right { return left > right }
-      case .savingsPercent:
-        let left = lhs.estimatedSavingsRatio ?? -1
-        let right = rhs.estimatedSavingsRatio ?? -1
+      case .savingsLargest, .savingsPercent:
+        let left = lhs.originalBytes ?? -1
+        let right = rhs.originalBytes ?? -1
         if left != right { return left > right }
       case .sizeLargest:
         let left = lhs.originalBytes ?? -1
