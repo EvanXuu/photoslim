@@ -88,4 +88,4 @@ PhotoSlim/Scripts/build-app.sh
 
 ## 隐私与许可证
 
-PhotoSlim 不包含遥测或云端服务，媒体处理在本机完成；只有 Photos/iCloud 自身可能产生网络流量。本仓库目前未附带开源许可证，源码公开用于审阅，但默认保留所有权利。
+PhotoSlim 不包含遥测或云端服务，媒体处理在本机完成；只有 Photos/iCloud 自身可能产生网络流量。PhotoSlim 是基于 [MIT 许可证](LICENSE)发布的开源软件。

@@ -118,4 +118,4 @@ Real PhotoKit create/delete flows are not run by automated tests because they wo
 
 ## Privacy and license
 
-PhotoSlim has no telemetry or cloud service. Media processing happens locally; Photos and iCloud may perform their own network operations. This repository currently has no open-source license, so the source is available for review but remains all rights reserved by default.
+PhotoSlim has no telemetry or cloud service. Media processing happens locally; Photos and iCloud may perform their own network operations. PhotoSlim is open-source software available under the [MIT License](LICENSE).
