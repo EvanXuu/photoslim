@@ -41,9 +41,16 @@ struct LibraryBrowserView: View {
         }
 
         Menu {
-          Picker("排序", selection: $model.filter.sortOption) {
-            ForEach(SortOption.allCases.filter(\.isVisible)) { option in
-              Text(option.title).tag(option)
+          ForEach(SortOption.allCases.filter(\.isVisible)) { option in
+            Button {
+              model.filter.sortOption = option
+              model.savePreferences()
+            } label: {
+              if model.filter.sortOption == option {
+                Label(option.title, systemImage: "checkmark")
+              } else {
+                Text(option.title)
+              }
             }
           }
         } label: {
@@ -167,20 +174,9 @@ private struct SelectionBar: View {
             ? "选择要压缩的项目" : "已选择 \(model.selectedIdentifiers.count) 个项目"
         )
         .font(.system(size: 13, weight: .semibold))
-        if !model.selectedIdentifiers.isEmpty {
-          Text(selectionSummary)
+        Text(storageSummary)
           .font(.system(size: 11))
           .foregroundStyle(.secondary)
-          if let report = model.selectionDiskReport {
-            Label(
-              "需要空间 \(MediaFormatting.bytes(report.requiredBytes)) · 可用 \(MediaFormatting.bytes(report.availableBytes))",
-              systemImage: report.hasEnoughSpace
-                ? "externaldrive.badge.checkmark" : "externaldrive.badge.exclamationmark"
-            )
-            .font(.system(size: 10, weight: .medium))
-            .foregroundStyle(report.hasEnoughSpace ? PhotoSlimTheme.success : PhotoSlimTheme.danger)
-          }
-        }
       }
 
       Spacer()
@@ -202,8 +198,8 @@ private struct SelectionBar: View {
       if !model.selectedIdentifiers.isEmpty {
         Button("清除") { model.clearSelection() }
       }
-      Button(model.currentSession?.phase.blocksNewTask == true ? "加入准备队列" : "检查空间并开始") {
-        model.prepareSelectedTask()
+      Button(model.currentSession?.phase.blocksNewTask == true ? "加入准备队列" : "开始压缩") {
+        model.beginSelectedTask()
       }
       .buttonStyle(SignalButtonStyle())
       .disabled(model.selectedIdentifiers.isEmpty)
@@ -214,15 +210,11 @@ private struct SelectionBar: View {
     .overlay(alignment: .top) { Divider() }
   }
 
-  private var selectionSummary: String {
-    var parts: [String] = []
-    if model.selectedInputBytes > 0 {
-      parts.append("文件 \(MediaFormatting.bytes(model.selectedInputBytes))")
+  private var storageSummary: String {
+    if let storage = model.localStorageReport {
+      return "\(MediaFormatting.bytes(storage.availableBytes)) 可用 · 共 \(MediaFormatting.bytes(storage.totalBytes))"
     }
-    if model.selectedCloudAssetCount > 0 {
-      parts.append("云端项目 \(model.selectedCloudAssetCount) 个")
-    }
-    return parts.joined(separator: " · ")
+    return model.storageStatusError == nil ? "正在读取存储空间" : "存储空间暂不可用"
   }
 }
 

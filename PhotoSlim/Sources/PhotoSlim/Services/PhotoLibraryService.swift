@@ -1,10 +1,16 @@
 import AVFoundation
-import AppKit
 import Combine
 import CoreLocation
 import Foundation
 import Photos
 import UniformTypeIdentifiers
+#if canImport(AppKit)
+import AppKit
+typealias PhotoSlimPlatformImage = NSImage
+#elseif canImport(UIKit)
+import UIKit
+typealias PhotoSlimPlatformImage = UIImage
+#endif
 
 enum LibraryAccessState: Equatable, Sendable {
   case notDetermined
@@ -872,7 +878,7 @@ final class PhotoLibraryService: @unchecked Sendable {
     kind: MediaKind,
     targetSize: CGSize,
     networkAllowed: Bool
-  ) async -> NSImage? {
+  ) async -> PhotoSlimPlatformImage? {
     guard let asset = try? fetchAsset(identifier: identifier) else { return nil }
     if kind == .photo {
       let options = PHImageRequestOptions()
@@ -904,7 +910,11 @@ final class PhotoLibraryService: @unchecked Sendable {
       generator.generateCGImagesAsynchronously(forTimes: [time]) {
         _, image, _, _, _ in
         if let image {
+          #if canImport(AppKit)
           continuation.resume(returning: NSImage(cgImage: image, size: .zero))
+          #else
+          continuation.resume(returning: UIImage(cgImage: image))
+          #endif
         } else {
           continuation.resume(returning: nil)
         }
@@ -1290,13 +1300,21 @@ final class PhotoLibraryService: @unchecked Sendable {
     for asset: PHAsset,
     resources: [PHAssetResource]
   ) -> Int64? {
+#if os(macOS)
     guard #available(macOS 27.0, *) else { return nil }
+#elseif os(iOS)
+    guard #available(iOS 26.0, *) else { return nil }
+#else
+    return nil
+#endif
     guard let primary = primaryResource(for: asset, resources: resources) else { return nil }
 
     // The current SDK used to build the macOS 14-compatible target does not
     // declare PHAssetResource.dataSize yet. Read the runtime property by its
     // documented name so newer Photos frameworks can provide it without
     // making the older deployment target depend on a newer SDK declaration.
+    let selector = NSSelectorFromString("dataSize")
+    guard primary.responds(to: selector) else { return nil }
     let value = primary.value(forKey: "dataSize")
     let size = (value as? NSNumber)?.int64Value ?? (value as? Int).map(Int64.init)
     guard let size, size > 0 else { return nil }
@@ -1367,7 +1385,7 @@ final class PhotoLibraryService: @unchecked Sendable {
 
 @MainActor
 final class ThumbnailLoader: ObservableObject {
-  @Published var image: NSImage?
+  @Published var image: PhotoSlimPlatformImage?
   private var requestID: PHImageRequestID = PHInvalidImageRequestID
 
   func load(identifier: String, targetSize: CGSize) {

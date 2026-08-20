@@ -1,8 +1,12 @@
 import AVFoundation
-import AppKit
 import Combine
 import Foundation
 import SwiftUI
+#if canImport(AppKit)
+import AppKit
+#elseif canImport(UIKit)
+import UIKit
+#endif
 
 enum SidebarDestination: String, CaseIterable, Identifiable, Hashable {
   case library
@@ -607,8 +611,14 @@ private struct PreparedDownload: @unchecked Sendable {
       pendingTask = QueuedCompressionTask(assets: selected, settings: settings)
       pendingDiskReport = report
     } catch {
-      notice = AppNotice(title: "无法检查可用空间", message: "请稍后重试。")
+      notice = AppNotice(title: "无法开始任务", message: "暂时无法读取本机可用空间，请稍后重试。")
     }
+  }
+
+  func beginSelectedTask() {
+    prepareSelectedTask()
+    guard pendingTask != nil, pendingDiskReport != nil else { return }
+    confirmPreparedTask()
   }
 
   func cancelPreparedTask() {
@@ -632,7 +642,7 @@ private struct PreparedDownload: @unchecked Sendable {
 
     if currentSession?.phase.blocksNewTask == true {
       queue.append(task)
-      queueStatusMessage = "已加入队列；当前任务审核完成后会再次检查空间。"
+      queueStatusMessage = "已加入队列；当前任务完成后会自动继续。"
       Task { await persist() }
     } else {
       start(task: task)
@@ -714,7 +724,10 @@ private struct PreparedDownload: @unchecked Sendable {
     return directory.appendingPathComponent(filename)
   }
 
-  func loadOriginalReviewImage(for item: TaskItemRecord, targetSize: CGSize) async -> NSImage? {
+  func loadOriginalReviewImage(
+    for item: TaskItemRecord,
+    targetSize: CGSize
+  ) async -> PhotoSlimPlatformImage? {
     await photoLibrary.requestPreviewImage(
       identifier: item.source.id,
       kind: item.source.kind,

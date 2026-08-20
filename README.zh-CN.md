@@ -1,6 +1,6 @@
 # PhotoSlim
 
-PhotoSlim 是一款原生 macOS 照片与视频压缩工具。在修改 Apple 照片图库前，它会先把压缩结果保存在本机，完成文件验证，并让你逐项对比原件。
+PhotoSlim 是一款同时提供 macOS 与 iOS 客户端的原生 Apple 照片压缩工具。在修改照片图库前，它会先把压缩结果保存在本机，完成文件验证，并让你逐项对比原件。
 
 > **0.2beta**：这是面向小规模、有备份图库测试的早期版本。请不要直接处理重要媒体的唯一副本。下载包使用 ad-hoc 签名且尚未公证，macOS 可能显示未知开发者警告。
 
@@ -26,11 +26,13 @@ PhotoSlim 是一款原生 macOS 照片与视频压缩工具。在修改 Apple �
 - 使用原生 macOS 窗口标题和副标题显示当前媒体类型及项目数量，不再额外叠加标题气泡。
 - 扫描和选择阶段不显示预计输出大小或预计节省；只有实际压缩并验证完成后才记录真实节省空间。
 - 新建或未被用户修改过的旧设置默认使用 8% 最低实际节省比例。
+- macOS 排序按钮会直接列出所有排序方式；图库底栏常驻显示设备可用空间与总容量。
+- 空间和安全余量在任务开始时于后台校验，不再展示独立预检。iPhone 选中项目后，四个工作区会暂时替换为包含状态、参数和下一步操作的胶囊栏。
 
 ## 安全流程
 
 1. 选择项目。
-2. 检查空间，最多并行下载 5 个 iCloud 原件，压缩并验证文件。
+2. PhotoSlim 在后台检查空间，最多并行下载 5 个 iCloud 原件，压缩并验证文件。
 3. 在本机审核结果，可撤回并清理，或确认写入。
 4. PhotoSlim 创建并验证 Photos 副本。
 5. Photos 显示系统确认，将原件移到“最近删除”。
@@ -60,9 +62,12 @@ PhotoSlim 会尽可能复制并验证 PhotoKit 能提供的新资产元数据，
 ## 系统要求
 
 - macOS 14 或更高版本。
+- iPhone 目标最低支持 iOS 17。
 - 已允许读取和添加 Apple 照片图库。
 - 有足够空间容纳所选 iCloud 原件、临时输出和安全余量。
 - 从源码构建需要 Xcode Command Line Tools 和 Swift 6 工具链。
+
+包中已加入最低 iOS 17 的 SwiftUI 目标。它直接复用 macOS 应用的 AppModel、PhotoKit 扫描、空间检查、压缩、队列、会话恢复、统计、历史及审核写回流程；iPhone 端只单独适配原生导航和触控界面，包括左上角媒体类型、右上角筛选与更多、下拉搜索和四个底部工作区。选中任意项目后，工作区栏会暂时替换为胶囊状态栏；iOS 26 使用原生 Liquid Glass，iOS 17–25 使用系统材质回退。
 
 ## 从源码构建与测试
 
@@ -85,6 +90,14 @@ PhotoSlim/Scripts/build-app.sh
 ~~~
 
 默认输出到 `PhotoSlim/build/PhotoSlim.app` 和 `PhotoSlim/build/PhotoSlim.app.zip`。使用稳定证书签名时，请在运行脚本前设置 `PHOTOSLIM_SIGNING_IDENTITY`。
+
+构建并打包通用 iOS 模拟器应用：
+
+~~~
+PhotoSlim/Scripts/build-ios-simulator-app.sh
+~~~
+
+模拟器 ZIP 输出到 `PhotoSlim/build/PhotoSlim-iOS-Simulator.app.zip`；供 `simctl` 直接安装的签名 `.app` 默认位于 `/private/tmp/PhotoSlim-iOS-Simulator-build`。
 
 ## 隐私与许可证
 

@@ -26,10 +26,6 @@ struct RootView: View {
       }
     }
     .animation(.easeInOut(duration: 0.18), value: model.isTaskPanelMinimized)
-    .sheet(item: $model.pendingTask, onDismiss: model.cancelPreparedTask) { _ in
-      DiskPreflightView()
-        .environmentObject(model)
-    }
     .alert(item: $model.notice) { notice in
       Alert(
         title: Text(notice.title), message: Text(notice.message), dismissButton: .default(Text("好"))
