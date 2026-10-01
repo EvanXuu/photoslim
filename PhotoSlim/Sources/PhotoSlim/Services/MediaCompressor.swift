@@ -1,7 +1,9 @@
 import AVFoundation
 import Foundation
 import ImageIO
+#if SWIFT_PACKAGE
 import PhotoSlimMediaCore
+#endif
 import UniformTypeIdentifiers
 import VideoToolbox
 
@@ -533,93 +535,27 @@ final class VideoCompressor: @unchecked Sendable {
 /// the detailed bitrate/GOP controls used by the manual path.
 @MainActor
 final class ExportSessionVideoCompressor {
-  private final class CancellationBox: @unchecked Sendable {
-    let session: AVAssetExportSession
-
-    init(session: AVAssetExportSession) {
-      self.session = session
-    }
-
-    func cancel() {
-      session.cancelExport()
-    }
-  }
-
   nonisolated init() {}
 
   func compress(
     asset: AVAsset,
     to outputURL: URL,
-    sessionMarker: String,
+    sessionMarker _: String,
     progress: @escaping @Sendable (Double) -> Void
   ) async throws {
-    if FileManager.default.fileExists(atPath: outputURL.path) {
-      try FileManager.default.removeItem(at: outputURL)
-    }
-
-    let candidates = [
-      AVAssetExportPresetHEVCHighestQuality,
-      AVAssetExportPresetHEVC3840x2160,
-      AVAssetExportPresetHEVC1920x1080,
-    ]
-    var preset: String?
-    for candidate in candidates {
-      if await AVAssetExportSession.compatibility(
-        ofExportPreset: candidate,
-        with: asset,
-        outputFileType: nil
-      ) {
-        preset = candidate
-        break
-      }
-    }
-    guard let preset else {
-      throw CompressionError.exportSession("当前系统没有可用的 HEVC 导出预设")
-    }
-    guard let session = AVAssetExportSession(asset: asset, presetName: preset) else {
-      throw CompressionError.exportSession("无法创建导出会话")
-    }
-
-    session.outputURL = outputURL
-    session.outputFileType = session.supportedFileTypes.contains(.mov) ? .mov : session.supportedFileTypes.first
-    session.shouldOptimizeForNetworkUse = false
-    session.metadata = try await VideoCompressor.metadata(
-      from: asset,
-      sessionMarker: sessionMarker
-    )
-
-    progress(0)
-    let monitor = Task { @MainActor in
-      while !Task.isCancelled {
-        progress(Double(session.progress))
-        if session.status == .completed || session.status == .failed
-          || session.status == .cancelled
-        {
-          break
-        }
-        try? await Task.sleep(nanoseconds: 120_000_000)
-      }
-    }
-    let cancellation = CancellationBox(session: session)
-
-    await withTaskCancellationHandler(operation: {
-      await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-        session.exportAsynchronously {
-          continuation.resume()
-        }
-      }
-    }, onCancel: {
-      cancellation.cancel()
-    })
-    monitor.cancel()
-
-    if Task.isCancelled { throw CancellationError() }
-    guard session.status == .completed else {
-      throw CompressionError.exportSession(
-        session.error?.localizedDescription ?? "导出没有完成"
+    do {
+      _ = try await PhotoSlimMediaCompressor().compressVideo(
+        asset: asset,
+        to: outputURL,
+        settings: PhotoSlimCoreCompressionSettings(
+          videoPreset: .highestQuality,
+          minimumSavingsRatio: 0
+        ),
+        progress: progress
       )
+    } catch let error as PhotoSlimCoreCompressionError {
+      throw CompressionError.exportSession(error.localizedDescription)
     }
-    progress(1)
   }
 }
 

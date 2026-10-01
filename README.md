@@ -1,6 +1,6 @@
 # PhotoSlim
 
-PhotoSlim is a native macOS app for reducing the size of an Apple Photos library while keeping the original asset safe until you approve the result.
+PhotoSlim is a native Apple Photos compressor with macOS and iOS clients. It keeps every original untouched until you review and approve the compressed result.
 
 > **0.2beta** — An early release for testing with small, backed-up batches. Do not start with the only copy of important media. The downloadable app is ad-hoc signed and not notarized, so macOS may show an unidentified developer warning.
 
@@ -33,6 +33,8 @@ PhotoSlim is a native macOS app for reducing the size of an Apple Photos library
 - The safety threshold defaults to 8% for new or untouched legacy settings.
 - Incremental library scans, search, filters, sorting, pinning, list/grid views, queue recovery, statistics, and task history are preserved across sessions.
 - User-facing messages describe the action, risk, and next step without exposing implementation details.
+- The macOS sort button now opens the available sort choices directly, and the library footer continuously shows available storage and total capacity.
+- Space and safety checks run silently when a task starts. On iPhone, selecting media replaces the workspace tabs with a Liquid Glass capsule containing the selection status, settings, and next action.
 
 ### Fixes
 
@@ -43,7 +45,7 @@ PhotoSlim is a native macOS app for reducing the size of an Apple Photos library
 ## Safe workflow
 
 1. Select assets.
-2. Check local space, download up to five iCloud originals, compress, and verify the files.
+2. PhotoSlim checks local space in the background, downloads up to five iCloud originals, compresses, and verifies the files.
 3. Review the generated results locally. You may undo and clean up, or approve the write.
 4. PhotoSlim creates and verifies the Photos copy.
 5. Photos asks for confirmation before the original is moved to Recently Deleted.
@@ -73,9 +75,12 @@ The prebuilt app is ad-hoc signed and not notarized. If macOS blocks the first l
 ## Requirements
 
 - macOS 14 or later.
+- iOS 17 or later for the iPhone target.
 - Permission to read and add to the Apple Photos library.
 - Enough local space for selected iCloud originals, temporary outputs, and the safety margin.
 - Xcode Command Line Tools and a Swift 6 toolchain for source builds.
+
+The package also contains an iOS 17 SwiftUI target. It compiles the same app model, PhotoKit scanner, disk checks, compressor, queue, session recovery, statistics, history, and review/write-back workflow as the macOS app. The iPhone-specific layer is limited to native navigation and touch presentation: media selection at the top left, Filter and More at the top right, pull-down search, and four bottom workspaces. Selecting any asset temporarily replaces those workspace tabs with a capsule status bar; iOS 26 uses native Liquid Glass, while iOS 17–25 uses system material.
 
 ## Build and test from source
 
@@ -99,6 +104,14 @@ PhotoSlim/Scripts/build-app.sh
 
 The default output is `PhotoSlim/build/PhotoSlim.app` and `PhotoSlim/build/PhotoSlim.app.zip`. To use a stable signing identity, set `PHOTOSLIM_SIGNING_IDENTITY` before running the script.
 
+Build and package the universal iOS Simulator app:
+
+~~~
+PhotoSlim/Scripts/build-ios-simulator-app.sh
+~~~
+
+The simulator archive is written to `PhotoSlim/build/PhotoSlim-iOS-Simulator.app.zip`; the signed app used by `simctl` is built under `/private/tmp/PhotoSlim-iOS-Simulator-build` by default.
+
 ## Project structure
 
 ~~~
@@ -109,6 +122,8 @@ PhotoSlim/
 |   |-- Services/  PhotoKit, compression, disk checks, and persistence
 |   |-- Theme/     Colors, spacing, and reusable styles
 |   `-- Views/     Browser, task, review, queue, statistics, and history UI
+|-- Sources/PhotoSlimiOSClient/  Native iPhone navigation and workspace views
+|-- PhotoSlim-iOS.xcodeproj/     iOS 17 app target using the shared sources
 |-- Tests/         Pure logic and generated-media encoding tests
 |-- Resources/     Info.plist, entitlements, and app icon
 `-- Scripts/       App packaging and icon generation

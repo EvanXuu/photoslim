@@ -45,13 +45,8 @@ struct StatisticsView: View {
   private var storageOverview: some View {
     VStack(alignment: .leading, spacing: 14) {
       HStack {
-        VStack(alignment: .leading, spacing: 3) {
-          Text("本机存储空间")
-            .font(.system(size: 13, weight: .semibold))
-            Text("显示本机空间状态；云端项目会在处理时确认大小。")
-            .font(.system(size: 10))
-            .foregroundStyle(.secondary)
-        }
+        Text("本机存储空间")
+          .font(.system(size: 13, weight: .semibold))
         Spacer()
         Button {
           model.refreshStorageStatus(enforceSelectionLimit: true, showNotice: true)
@@ -86,26 +81,6 @@ struct StatisticsView: View {
       } else {
         ProgressView()
           .controlSize(.small)
-      }
-
-      Divider()
-
-      if let report = model.selectionDiskReport {
-        HStack {
-          Label(
-            "当前选择需要 \(MediaFormatting.bytes(report.requiredBytes))",
-            systemImage: "checkmark.circle.fill"
-          )
-          .foregroundStyle(report.hasEnoughSpace ? PhotoSlimTheme.success : PhotoSlimTheme.danger)
-          Spacer()
-          Text("可用于任务 \(MediaFormatting.bytes(report.availableBytes))")
-            .foregroundStyle(.secondary)
-        }
-        .font(.system(size: 10, weight: .medium))
-      } else {
-        Text("当前没有待处理选择。")
-          .font(.system(size: 10))
-          .foregroundStyle(.secondary)
       }
     }
     .padding(16)

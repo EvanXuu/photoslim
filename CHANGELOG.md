@@ -16,10 +16,12 @@ PhotoSlim 0.2beta makes the compression flow review-first: originals remain unto
 
 ### Improvements
 
-- Removed speculative output-size and savings estimates from scanning, selection, and preflight. Real savings are recorded only after the output has been created and verified.
+- Removed speculative output-size and savings estimates from scanning, selection, and background storage checks. Real savings are recorded only after the output has been created and verified.
 - The default minimum real saving threshold is now 8% for new or untouched legacy settings.
 - iCloud items use the known original `dataSize` when Photos provides it; unknown sizes are not estimated.
 - Incremental scanning, search, filters, sorting, pinning, list/grid views, session recovery, statistics, and task history are retained while the user-facing copy is simpler and less implementation-focused.
+- The macOS sort control lists sort choices directly. Disk checks now run without a separate preflight screen, while the library footer shows available and total device storage.
+- Selecting media on iPhone hides the workspace tabs and presents a capsule action bar, using native Liquid Glass on iOS 26 and system material on earlier supported versions.
 
 ### Bug fixes
 
