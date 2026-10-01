@@ -1,8 +1,15 @@
+#if SWIFT_PACKAGE
+import PhotoSlimMediaCore
+#endif
 import AVFoundation
-import AppKit
 import Combine
 import Foundation
 import SwiftUI
+#if canImport(AppKit)
+import AppKit
+#elseif canImport(UIKit)
+import UIKit
+#endif
 
 enum SidebarDestination: String, CaseIterable, Identifiable, Hashable {
   case library
@@ -17,13 +24,13 @@ enum SidebarDestination: String, CaseIterable, Identifiable, Hashable {
 
   var title: String {
     switch self {
-    case .library: return "照片图库"
-    case .photos: return "照片"
-    case .videos: return "视频"
-    case .favorites: return "收藏"
-    case .queue: return "准备队列"
-    case .statistics: return "统计"
-    case .history: return "任务历史"
+    case .library: return L10n("照片图库")
+    case .photos: return L10n("照片")
+    case .videos: return L10n("视频")
+    case .favorites: return L10n("收藏")
+    case .queue: return L10n("准备队列")
+    case .statistics: return L10n("统计")
+    case .history: return L10n("任务历史")
     }
   }
 
@@ -94,18 +101,22 @@ private struct PreparedDownload: @unchecked Sendable {
   @Published private(set) var storageStatusError: String?
   @Published private(set) var currentWorkingDirectory: URL?
   @Published private(set) var pendingCleanupSessionID: UUID?
+  @Published private(set) var processedAssetSync = ProcessedAssetSyncSnapshot.initial
 
   private let photoLibrary: PhotoLibraryService
   private let store: SessionStore
   private let compressionEngine: MediaCompressionEngine
+  private let cloudSync: ProcessedAssetCloudSyncService
   private var runner: Task<Void, Never>?
   private var scanTask: Task<Void, Never>?
   private var libraryChangeTask: Task<Void, Never>?
+  private var cloudSyncUpdatesTask: Task<Void, Never>?
   private var hasBootstrapped = false
   private var hasLibraryIndex = false
   private var libraryChangePending = false
   private var libraryChangeTokenData: Data?
   private var processedAssetIdentifiers: Set<String> = []
+  private var cloudProcessedAssetIdentifiers: Set<String> = []
   private var selectionOrder: [String] = []
   private var assetsRevision = 0
   private var visibleAssetsCache: [MediaAsset]?
@@ -116,11 +127,13 @@ private struct PreparedDownload: @unchecked Sendable {
   init(
     photoLibrary: PhotoLibraryService = PhotoLibraryService(),
     store: SessionStore = SessionStore(),
-    compressionEngine: MediaCompressionEngine = MediaCompressionEngine()
+    compressionEngine: MediaCompressionEngine = MediaCompressionEngine(),
+    cloudSync: ProcessedAssetCloudSyncService? = nil
   ) {
     self.photoLibrary = photoLibrary
     self.store = store
     self.compressionEngine = compressionEngine
+    self.cloudSync = cloudSync ?? ProcessedAssetCloudSyncService(photoLibrary: photoLibrary)
     accessState = photoLibrary.authorizationState
   }
 
@@ -253,12 +266,16 @@ private struct PreparedDownload: @unchecked Sendable {
           migratedState = true
         }
       } catch {
-        notice = AppNotice(title: "无法恢复任务", message: "上次任务没有恢复完成，请检查任务历史。")
+        notice = AppNotice(title: L10n("无法恢复任务"), message: L10n("上次任务没有恢复完成，请检查任务历史。"))
       }
 
       refreshStorageStatus(enforceSelectionLimit: true, showNotice: false)
       if migratedState { await persist() }
       accessState = photoLibrary.authorizationState
+      Task {
+        await startProcessedAssetSync()
+        await backfillProcessedAssetHistoryIfNeeded()
+      }
       guard accessState.canRead else { return }
       await loadLibraryIndexIfAvailable()
       startObservingLibraryChanges()
@@ -271,6 +288,12 @@ private struct PreparedDownload: @unchecked Sendable {
     Task {
       accessState = await photoLibrary.requestAuthorization()
       if accessState.canRead {
+        Task {
+          await startProcessedAssetSync()
+          await backfillProcessedAssetHistoryIfNeeded()
+          await cloudSync.refreshPhotoMappings()
+        }
+        await backfillProcessedAssetHistoryIfNeeded()
         await loadLibraryIndexIfAvailable()
         startObservingLibraryChanges()
         await recoverSessionIfNeeded()
@@ -286,9 +309,9 @@ private struct PreparedDownload: @unchecked Sendable {
     libraryChangePending = false
     scanCompleted = 0
     scanTotal = 0
-    scanFilename = hasLibraryIndex ? "正在检查图库更新" : "正在首次扫描图库"
+    scanFilename = hasLibraryIndex ? L10n("正在检查图库更新") : L10n("正在首次扫描图库")
     let scanSettings = settings
-    let scanProcessedIdentifiers = processedAssetIdentifiers
+    let scanProcessedIdentifiers = processedAssetIdentifiers.union(cloudProcessedAssetIdentifiers)
     let previousIndex =
       hasLibraryIndex
       ? LibraryScanIndex(
@@ -297,7 +320,7 @@ private struct PreparedDownload: @unchecked Sendable {
       )
       : nil
 
-    scanTask = Task {
+    scanTask = Task { [self] in
       do {
         let result = try await photoLibrary.scan(
           settings: scanSettings,
@@ -325,15 +348,16 @@ private struct PreparedDownload: @unchecked Sendable {
           )
         } catch {
           notice = AppNotice(
-            title: "无法保存扫描结果",
-            message: "本次结果仍可使用，下次启动可能需要重新扫描。"
+            title: L10n("无法保存扫描结果"),
+            message: L10n("本次结果仍可使用，下次启动可能需要重新扫描。")
           )
         }
         refreshStorageStatus(enforceSelectionLimit: true, showNotice: false)
+        await cloudSync.refreshPhotoMappings()
       } catch is CancellationError {
         // A cancelled scan leaves the last complete result visible.
       } catch {
-        notice = AppNotice(title: "扫描失败", message: "请稍后重试，原有扫描结果未被修改。")
+        notice = AppNotice(title: L10n("扫描失败"), message: L10n("请稍后重试，原有扫描结果未被修改。"))
       }
       isScanning = false
       scanTask = nil
@@ -363,6 +387,7 @@ private struct PreparedDownload: @unchecked Sendable {
       }
       libraryChangeTokenData = index.changeTokenData
       hasLibraryIndex = true
+      applyProcessedAssetSyncSnapshot(processedAssetSync)
       refreshStorageStatus(enforceSelectionLimit: true, showNotice: false)
     } catch {
       hasLibraryIndex = false
@@ -400,7 +425,80 @@ private struct PreparedDownload: @unchecked Sendable {
         )
       )
     } catch {
-      notice = AppNotice(title: "无法保存扫描结果", message: "当前图库内容仍可使用，请稍后重试。")
+      notice = AppNotice(title: L10n("无法保存扫描结果"), message: L10n("当前图库内容仍可使用，请稍后重试。"))
+    }
+  }
+
+  private func startProcessedAssetSync() async {
+    if cloudSyncUpdatesTask == nil {
+      let updates = await cloudSync.updates()
+      cloudSyncUpdatesTask = Task { [weak self] in
+        for await snapshot in updates {
+          guard !Task.isCancelled, let self else { return }
+          self.applyProcessedAssetSyncSnapshot(snapshot)
+        }
+      }
+    }
+    await cloudSync.start()
+  }
+
+  private func backfillProcessedAssetHistoryIfNeeded() async {
+    guard accessState.canRead else { return }
+    let candidates = history
+      .filter { $0.outcome == .committed }
+      .flatMap { record in
+        (record.processedAssetIdentifiers ?? []).map {
+          ProcessedAssetBackfillCandidate(
+            localIdentifier: $0,
+            committedAt: record.finishedAt
+          )
+        }
+      }
+    await cloudSync.backfillLegacyHistory(candidates)
+  }
+
+  private func applyProcessedAssetSyncSnapshot(_ snapshot: ProcessedAssetSyncSnapshot) {
+    processedAssetSync = snapshot
+    guard cloudProcessedAssetIdentifiers != snapshot.processedLocalIdentifiers else { return }
+    cloudProcessedAssetIdentifiers = snapshot.processedLocalIdentifiers
+
+    let effectiveProcessed = processedAssetIdentifiers.union(cloudProcessedAssetIdentifiers)
+    var changed = false
+    let updatedAssets = assets.map { value -> MediaAsset in
+      var asset = value
+      let identifier = asset.id
+      if effectiveProcessed.contains(identifier) {
+        changed = asset.exclusionReasons.insert(.alreadyProcessed).inserted || changed
+      } else if asset.exclusionReasons.remove(.alreadyProcessed) != nil {
+        changed = true
+      }
+      return asset
+    }
+    if changed { assets = updatedAssets }
+    let newlyExcluded = selectedIdentifiers.intersection(cloudProcessedAssetIdentifiers)
+    if !newlyExcluded.isEmpty {
+      removeSelectedIdentifiers(Array(newlyExcluded))
+    }
+    if changed {
+      Task { await saveLibraryIndexIfAvailable() }
+    }
+  }
+
+  func setProcessedAssetSyncEnabled(_ isEnabled: Bool) {
+    Task {
+      await cloudSync.setEnabled(isEnabled)
+      if isEnabled {
+        await backfillProcessedAssetHistoryIfNeeded()
+        await cloudSync.refreshPhotoMappings()
+      }
+    }
+  }
+
+  func retryProcessedAssetSync() {
+    Task {
+      await cloudSync.retry()
+      await backfillProcessedAssetHistoryIfNeeded()
+      await cloudSync.refreshPhotoMappings()
     }
   }
 
@@ -413,14 +511,14 @@ private struct PreparedDownload: @unchecked Sendable {
     }
     guard asset.canProcess else {
       notice = AppNotice(
-        title: "这个项目不能加入任务",
+        title: L10n("这个项目不能加入任务"),
         message: asset.exclusionReasons.first(where: \.isHardBlock)?.warning
-          ?? "当前版本无法安全处理这个项目。"
+          ?? L10n("当前版本无法安全处理这个项目。")
       )
       return
     }
     guard !reservedAssetIdentifiers.contains(asset.id) else {
-      notice = AppNotice(title: "项目已在任务中", message: "它已经处于当前任务或准备队列中。")
+      notice = AppNotice(title: L10n("项目已在任务中"), message: L10n("它已经处于当前任务或准备队列中。"))
       return
     }
     do {
@@ -428,8 +526,8 @@ private struct PreparedDownload: @unchecked Sendable {
       let removed = enforceCurrentSelectionLimit(availableBytes: storage.availableBytes)
       guard removed.isEmpty else {
         notice = AppNotice(
-          title: "已取消超出空间的选择",
-          message: "空间不足，已取消 \(removed.count) 个项目；新项目未加入。"
+          title: L10n("已取消超出空间的选择"),
+          message: L10n("空间不足，已取消 \(removed.count) 个项目；新项目未加入。")
         )
         return
       }
@@ -442,9 +540,9 @@ private struct PreparedDownload: @unchecked Sendable {
       guard report.hasEnoughSpace else {
         let shortfall = max(0, report.requiredBytes - report.availableBytes)
         notice = AppNotice(
-          title: "这个项目没有被选中",
+          title: L10n("这个项目没有被选中"),
           message:
-            "加入“\(asset.displayTitle)”后，任务临时空间将超过本机可用空间 \(MediaFormatting.bytes(shortfall))。请先减少选择或释放空间。"
+            L10n("加入“\(asset.displayTitle)”后，任务临时空间将超过本机可用空间 \(MediaFormatting.bytes(shortfall))。请先减少选择或释放空间。")
         )
         return
       }
@@ -454,13 +552,13 @@ private struct PreparedDownload: @unchecked Sendable {
       selectionDiskReport = report
       if asset.isPlainHVC1 {
         notice = AppNotice(
-          title: "已选择需要再次压缩的视频",
-          message: "这段视频会再次压缩。只有结果更小且检查通过后，才会进入预览；原件不会被修改。"
+          title: L10n("已选择需要再次压缩的视频"),
+          message: L10n("这段视频会再次压缩。只有结果更小且检查通过后，才会进入预览；原件不会被修改。")
         )
       }
     } catch {
-      storageStatusError = "无法读取本机空间"
-      notice = AppNotice(title: "无法检查本机空间", message: "请稍后重试。")
+      storageStatusError = L10n("无法读取本机空间")
+      notice = AppNotice(title: L10n("无法检查本机空间"), message: L10n("请稍后重试。"))
     }
   }
 
@@ -489,18 +587,18 @@ private struct PreparedDownload: @unchecked Sendable {
       let rejectedAdditions = plan.rejected.filter { additionIDs.contains($0.id) }
       if !removed.isEmpty || !rejectedAdditions.isEmpty {
         var details: [String] = []
-        if !removed.isEmpty { details.append("已取消 \(removed.count) 个原有的超限选择") }
+        if !removed.isEmpty { details.append(L10n("已取消 \(removed.count) 个原有的超限选择")) }
         if !rejectedAdditions.isEmpty {
-          details.append("有 \(rejectedAdditions.count) 个项目因空间不足未被选中")
+          details.append(L10n("有 \(rejectedAdditions.count) 个项目因空间不足未被选中"))
         }
         notice = AppNotice(
-          title: "已按本机空间限制选择",
-          message: details.joined(separator: "；") + "。云端项目会在开始后确认大小。"
+          title: L10n("已按本机空间限制选择"),
+          message: details.joined(separator: "；") + L10n("。云端项目会在开始后确认大小。")
         )
       }
     } catch {
-      storageStatusError = "无法读取本机空间"
-      notice = AppNotice(title: "无法检查本机空间", message: "请稍后重试。")
+      storageStatusError = L10n("无法读取本机空间")
+      notice = AppNotice(title: L10n("无法检查本机空间"), message: L10n("请稍后重试。"))
     }
   }
 
@@ -563,8 +661,8 @@ private struct PreparedDownload: @unchecked Sendable {
         let removed = enforceCurrentSelectionLimit(availableBytes: storage.availableBytes)
         if showNotice, !removed.isEmpty {
           notice = AppNotice(
-            title: "已取消超出空间的选择",
-            message: "本机可用于任务的空间发生变化，已取消最后选择的 \(removed.count) 个项目。"
+            title: L10n("已取消超出空间的选择"),
+            message: L10n("本机可用于任务的空间发生变化，已取消最后选择的 \(removed.count) 个项目。")
           )
         }
       } else if selectedIdentifiers.isEmpty {
@@ -576,13 +674,13 @@ private struct PreparedDownload: @unchecked Sendable {
         )
       }
     } catch {
-      storageStatusError = "无法读取本机空间"
+      storageStatusError = L10n("无法读取本机空间")
     }
   }
 
   func prepareSelectedTask() {
     guard !selectedIdentifiers.isEmpty else {
-      notice = AppNotice(title: "尚未选择项目", message: "请选择至少一个可处理的项目。")
+      notice = AppNotice(title: L10n("尚未选择项目"), message: L10n("请选择至少一个可处理的项目。"))
       return
     }
     do {
@@ -590,14 +688,14 @@ private struct PreparedDownload: @unchecked Sendable {
       let removed = enforceCurrentSelectionLimit(availableBytes: storage.availableBytes)
       guard removed.isEmpty else {
         notice = AppNotice(
-          title: "选择已按可用空间调整",
-          message: "已取消 \(removed.count) 个超出空间的后选项目。请核对当前选择后再开始。"
+          title: L10n("选择已按可用空间调整"),
+          message: L10n("已取消 \(removed.count) 个超出空间的后选项目。请核对当前选择后再开始。")
         )
         return
       }
       let selected = orderedSelectedAssets().filter(\.canProcess)
       guard !selected.isEmpty else {
-        notice = AppNotice(title: "尚未选择项目", message: "请选择至少一个可处理的项目。")
+        notice = AppNotice(title: L10n("尚未选择项目"), message: L10n("请选择至少一个可处理的项目。"))
         return
       }
       let report = DiskCapacityService.report(
@@ -607,8 +705,14 @@ private struct PreparedDownload: @unchecked Sendable {
       pendingTask = QueuedCompressionTask(assets: selected, settings: settings)
       pendingDiskReport = report
     } catch {
-      notice = AppNotice(title: "无法检查可用空间", message: "请稍后重试。")
+      notice = AppNotice(title: L10n("无法开始任务"), message: L10n("暂时无法读取本机可用空间，请稍后重试。"))
     }
+  }
+
+  func beginSelectedTask() {
+    prepareSelectedTask()
+    guard pendingTask != nil, pendingDiskReport != nil else { return }
+    confirmPreparedTask()
   }
 
   func cancelPreparedTask() {
@@ -620,9 +724,9 @@ private struct PreparedDownload: @unchecked Sendable {
     guard let task = pendingTask, let report = pendingDiskReport else { return }
     guard report.hasEnoughSpace else {
       notice = AppNotice(
-        title: "可用空间不足",
+        title: L10n("可用空间不足"),
         message:
-          "还需要保留 \(MediaFormatting.bytes(report.requiredBytes - report.availableBytes))。请释放空间后重试。"
+          L10n("还需要保留 \(MediaFormatting.bytes(report.requiredBytes - report.availableBytes))。请释放空间后重试。")
       )
       return
     }
@@ -632,7 +736,7 @@ private struct PreparedDownload: @unchecked Sendable {
 
     if currentSession?.phase.blocksNewTask == true {
       queue.append(task)
-      queueStatusMessage = "已加入队列；当前任务审核完成后会再次检查空间。"
+      queueStatusMessage = L10n("已加入队列；当前任务完成后会自动继续。")
       Task { await persist() }
     } else {
       start(task: task)
@@ -661,7 +765,7 @@ private struct PreparedDownload: @unchecked Sendable {
     let sessionID = session.id
     runner?.cancel()
     isTaskPanelMinimized = false
-    updateSessionStatus("正在终止任务并清理临时文件")
+    updateSessionStatus(L10n("正在终止任务并清理临时文件"))
     Task {
       await runner?.value
       do {
@@ -670,14 +774,14 @@ private struct PreparedDownload: @unchecked Sendable {
       } catch {
         pendingCleanupSessionID = sessionID
         notice = AppNotice(
-          title: "临时文件清理未完成",
-          message: "任务已终止，原件未修改。稍后可在任务历史中重试清理。"
+          title: L10n("临时文件清理未完成"),
+          message: L10n("任务已终止，原件未修改。稍后可在任务历史中重试清理。")
         )
       }
       guard let current = currentSession, current.id == sessionID else { return }
       var cancelled = current
       cancelled.phase = .cancelled
-      cancelled.statusMessage = "任务已终止，临时压缩文件已清理；原件未修改"
+      cancelled.statusMessage = L10n("任务已终止，临时压缩文件已清理；原件未修改")
       cancelled.updatedAt = Date()
       for index in cancelled.items.indices where cancelled.items[index].createdAssetIdentifier == nil {
         cancelled.items[index].state = .cancelled
@@ -699,10 +803,10 @@ private struct PreparedDownload: @unchecked Sendable {
       do {
         try await store.removeWorkingDirectory(for: sessionID)
         pendingCleanupSessionID = nil
-        notice = AppNotice(title: "临时文件已清理", message: "终止任务留下的临时文件已经删除，原件未修改。")
+        notice = AppNotice(title: L10n("临时文件已清理"), message: L10n("终止任务留下的临时文件已经删除，原件未修改。"))
         await persist()
       } catch {
-        notice = AppNotice(title: "清理仍未完成", message: "原件未修改，请稍后重试。")
+        notice = AppNotice(title: L10n("清理仍未完成"), message: L10n("原件未修改，请稍后重试。"))
       }
     }
   }
@@ -714,7 +818,10 @@ private struct PreparedDownload: @unchecked Sendable {
     return directory.appendingPathComponent(filename)
   }
 
-  func loadOriginalReviewImage(for item: TaskItemRecord, targetSize: CGSize) async -> NSImage? {
+  func loadOriginalReviewImage(
+    for item: TaskItemRecord,
+    targetSize: CGSize
+  ) async -> PhotoSlimPlatformImage? {
     await photoLibrary.requestPreviewImage(
       identifier: item.source.id,
       kind: item.source.kind,
@@ -758,7 +865,7 @@ private struct PreparedDownload: @unchecked Sendable {
       session.items[index].compressionProgress = 0
     }
     session.phase = .processing
-    session.statusMessage = "重试失败项目"
+    session.statusMessage = L10n("重试失败项目")
     session.updatedAt = Date()
     currentSession = session
     runner = Task {
@@ -774,14 +881,14 @@ private struct PreparedDownload: @unchecked Sendable {
       guard report.hasEnoughSpace else {
         queue.insert(task, at: 0)
         queueStatusMessage =
-          "队首任务空间不足，需要 \(MediaFormatting.bytes(report.requiredBytes))，当前可用 \(MediaFormatting.bytes(report.availableBytes))。"
+          L10n("队首任务空间不足，需要 \(MediaFormatting.bytes(report.requiredBytes))，当前可用 \(MediaFormatting.bytes(report.availableBytes))。")
         destination = .queue
         Task { await persist() }
         return
       }
     } catch {
       queue.insert(task, at: 0)
-      queueStatusMessage = "重新检查空间失败，请稍后重试。"
+      queueStatusMessage = L10n("重新检查空间失败，请稍后重试。")
       destination = .queue
       Task { await persist() }
       return
@@ -856,7 +963,7 @@ private struct PreparedDownload: @unchecked Sendable {
             $0.errorMessage = error.localizedDescription
             $0.progress = 1
           }
-          updateSessionStatus("已跳过：\(item.source.displayTitle)")
+          updateSessionStatus(L10n("已跳过：\(item.source.displayTitle)"))
           await persist()
         }
       }
@@ -870,8 +977,8 @@ private struct PreparedDownload: @unchecked Sendable {
       completed.phase = previewCount > 0 ? .reviewPending : .failed
       completed.statusMessage =
         previewCount > 0
-        ? "压缩结果已准备，请在本地预览后决定是否写入相册"
-        : "没有项目成功创建压缩结果"
+        ? L10n("压缩结果已准备，请在本地预览后决定是否写入相册")
+        : L10n("没有项目成功创建压缩结果")
       completed.updatedAt = Date()
       currentSession = completed
       isTaskPanelMinimized = false
@@ -887,8 +994,8 @@ private struct PreparedDownload: @unchecked Sendable {
       failed.phase = hasCreatedCopies ? .reviewPending : .failed
       failed.statusMessage =
         hasCreatedCopies
-        ? "有项目未完成，任务已暂停，请检查结果。"
-        : "任务没有完成，原件未修改。"
+        ? L10n("有项目未完成，任务已暂停，请检查结果。")
+        : L10n("任务没有完成，原件未修改。")
       failed.updatedAt = Date()
       currentSession = failed
       isTaskPanelMinimized = false
@@ -905,6 +1012,9 @@ private struct PreparedDownload: @unchecked Sendable {
     -> PreparedDownload
   {
     guard currentSession != nil else { throw CancellationError() }
+    try Task.checkCancellation()
+    guard !processedAssetIdentifiers.union(cloudProcessedAssetIdentifiers).contains(originalSource.id)
+    else { throw CompressionError.alreadyProcessed }
     var source = originalSource
     let isCloud = source.isCloudOnly
     updateItem(itemID, makeCurrent: !isPrefetch) {
@@ -915,9 +1025,9 @@ private struct PreparedDownload: @unchecked Sendable {
       $0.errorMessage = nil
     }
     if !isPrefetch, isCloud {
-      updateSessionStatus("正在下载 \(source.displayTitle)")
+      updateSessionStatus(L10n("正在下载 \(source.displayTitle)"))
     } else if !isPrefetch {
-      updateSessionStatus("正在准备 \(source.displayTitle)")
+      updateSessionStatus(L10n("正在准备 \(source.displayTitle)"))
     }
     await persist()
 
@@ -942,6 +1052,7 @@ private struct PreparedDownload: @unchecked Sendable {
       }
     }
     let measuredBytes = downloaded.byteCount
+    try Task.checkCancellation()
 
     guard measuredBytes > 0 else { throw CompressionError.originalSizeUnavailable }
     if let analysis = downloaded.videoAnalysis {
@@ -989,6 +1100,10 @@ private struct PreparedDownload: @unchecked Sendable {
   ) async throws {
     guard let record = item(itemID), let session = currentSession else { return }
     var source = record.source
+    guard !processedAssetIdentifiers.union(cloudProcessedAssetIdentifiers).contains(source.id) else {
+      if let prepared { try? FileManager.default.removeItem(at: prepared.originalFileURL) }
+      throw CompressionError.alreadyProcessed
+    }
 
     if record.state == .fileVerified,
       let temporaryFilename = record.temporaryFilename
@@ -1016,6 +1131,8 @@ private struct PreparedDownload: @unchecked Sendable {
       try? FileManager.default.removeItem(at: downloaded.originalFileURL)
     }
     source = downloaded.source
+    guard !processedAssetIdentifiers.union(cloudProcessedAssetIdentifiers).contains(source.id)
+    else { throw CompressionError.alreadyProcessed }
 
     guard source.canProcess else {
       if source.exclusionReasons.contains(.hdr) {
@@ -1044,7 +1161,7 @@ private struct PreparedDownload: @unchecked Sendable {
       $0.downloadProgress = 1
       $0.progress = 0.38
     }
-    updateSessionStatus("正在压缩 \(source.displayTitle)")
+    updateSessionStatus(L10n("正在压缩 \(source.displayTitle)"))
     await persist()
 
     let output = try await compressionEngine.compress(
@@ -1064,6 +1181,11 @@ private struct PreparedDownload: @unchecked Sendable {
       }
     }
 
+    try Task.checkCancellation()
+    guard !processedAssetIdentifiers.union(cloudProcessedAssetIdentifiers).contains(source.id) else {
+      try? FileManager.default.removeItem(at: output.fileURL)
+      throw CompressionError.alreadyProcessed
+    }
     updateItem(itemID) {
       $0.state = .fileVerified
       $0.temporaryFilename = output.fileURL.lastPathComponent
@@ -1082,7 +1204,7 @@ private struct PreparedDownload: @unchecked Sendable {
       $0.actualOutputBytes = output.byteCount
       $0.progress = 0.88
     }
-    updateSessionStatus("正在准备写入相册的结果")
+    updateSessionStatus(L10n("正在准备写入相册的结果"))
     await persist()
 
     let identifier = try await photoLibrary.importCompressedAsset(
@@ -1175,7 +1297,7 @@ private struct PreparedDownload: @unchecked Sendable {
   private func performRollback() async {
     guard var session = currentSession else { return }
     session.phase = .rollingBack
-    session.statusMessage = "正在清理压缩结果"
+    session.statusMessage = L10n("正在清理压缩结果")
     for index in session.items.indices {
       if session.items[index].createdAssetIdentifier != nil,
         session.items[index].state != .failed
@@ -1189,7 +1311,7 @@ private struct PreparedDownload: @unchecked Sendable {
     do {
       let identifiers = session.items.compactMap(\.createdAssetIdentifier)
       if !identifiers.isEmpty {
-        session.statusMessage = "正在撤回压缩结果"
+        session.statusMessage = L10n("正在撤回压缩结果")
         currentSession = session
         try await photoLibrary.deleteAssets(identifiers: identifiers)
       }
@@ -1198,7 +1320,7 @@ private struct PreparedDownload: @unchecked Sendable {
         finished.items[index].state = .rolledBack
       }
       finished.phase = .rolledBack
-      finished.statusMessage = identifiers.isEmpty ? "压缩结果已清理" : "压缩结果已移到最近删除"
+      finished.statusMessage = identifiers.isEmpty ? L10n("压缩结果已清理") : L10n("压缩结果已移到最近删除")
       finished.updatedAt = Date()
       currentSession = finished
       await archiveAndClear(finished)
@@ -1211,17 +1333,17 @@ private struct PreparedDownload: @unchecked Sendable {
     guard let record = item(itemID),
       let filename = record.temporaryFilename
     else {
-      throw CompressionError.outputVerification("找不到本地压缩结果")
+      throw CompressionError.outputVerification(L10n("找不到本地压缩结果"))
     }
     let outputURL = directory.appendingPathComponent(filename)
     guard FileManager.default.fileExists(atPath: outputURL.path) else {
-      throw CompressionError.outputVerification("本地压缩结果已丢失")
+      throw CompressionError.outputVerification(L10n("本地压缩结果已丢失"))
     }
     let byteCount = Int64(
       (try outputURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
     )
     guard byteCount > 0 else {
-      throw CompressionError.outputVerification("本地压缩结果为空")
+      throw CompressionError.outputVerification(L10n("本地压缩结果为空"))
     }
     let output = CompressionOutput(
       fileURL: outputURL,
@@ -1274,7 +1396,7 @@ private struct PreparedDownload: @unchecked Sendable {
   private func performCommit() async {
     guard var session = currentSession else { return }
     session.phase = .committing
-    session.statusMessage = "正在写入相册"
+    session.statusMessage = L10n("正在写入相册")
     currentSession = session
     await persist()
 
@@ -1309,18 +1431,37 @@ private struct PreparedDownload: @unchecked Sendable {
       }
       guard !valid.isEmpty else {
         ready.phase = .reviewPending
-        ready.statusMessage = "没有可写入的压缩结果；原件未修改"
+        ready.statusMessage = L10n("没有可写入的压缩结果；原件未修改")
         ready.updatedAt = Date()
         currentSession = ready
         await persist()
         return
+      }
+
+      if processedAssetSync.isEnabled {
+        let localIdentifiers = valid.flatMap { item in
+          [item.source.id, item.createdAssetIdentifier].compactMap { $0 }
+        }
+        let photoLibrary = self.photoLibrary
+        let cloudIdentifiers = await Task.detached(priority: .utility) {
+          photoLibrary.cloudIdentifiers(forLocalIdentifiers: localIdentifiers)
+        }.value
+        for index in ready.items.indices where
+          ready.items[index].state == .reviewPending
+            && ready.items[index].createdAssetIdentifier != nil
+        {
+          ready.items[index].sourceCloudIdentifier = cloudIdentifiers[ready.items[index].source.id]
+          if let createdAssetIdentifier = ready.items[index].createdAssetIdentifier {
+            ready.items[index].createdCloudIdentifier = cloudIdentifiers[createdAssetIdentifier]
+          }
+        }
       }
       for index in ready.items.indices where
         ready.items[index].state == .reviewPending && ready.items[index].createdAssetIdentifier != nil
       {
         ready.items[index].state = .committing
       }
-      ready.statusMessage = "正在删除已确认的原件"
+      ready.statusMessage = L10n("正在删除已确认的原件")
       ready.updatedAt = Date()
       currentSession = ready
       await persist()
@@ -1340,7 +1481,7 @@ private struct PreparedDownload: @unchecked Sendable {
         }
       }
       finished.phase = .committed
-      finished.statusMessage = "原件已移到最近删除"
+      finished.statusMessage = L10n("原件已移到最近删除")
       finished.updatedAt = Date()
       currentSession = finished
       await saveLibraryIndexIfAvailable()
@@ -1353,19 +1494,31 @@ private struct PreparedDownload: @unchecked Sendable {
   private func restoreReviewAfterDecisionError(_ error: Error) {
     guard var session = currentSession else { return }
     session.phase = .reviewPending
-    session.statusMessage = "操作未完成，请重新选择"
+    session.statusMessage = L10n("操作未完成，请重新选择")
     for index in session.items.indices {
       if session.items[index].state == .committing || session.items[index].state == .rollingBack {
         session.items[index].state = .reviewPending
       }
     }
     currentSession = session
-    notice = AppNotice(title: "照片图库没有完成操作", message: "原件未修改，请稍后重试。")
+    notice = AppNotice(title: L10n("照片图库没有完成操作"), message: L10n("原件未修改，请稍后重试。"))
     Task { await persist() }
   }
 
   private func archiveAndClear(_ session: CompressionSession) async {
     if session.phase == .committed {
+      let commits = session.items.compactMap { item -> ProcessedAssetCommit? in
+        guard item.state == .committed,
+          let outputLocalIdentifier = item.createdAssetIdentifier
+        else { return nil }
+        return ProcessedAssetCommit(
+          outputLocalIdentifier: outputLocalIdentifier,
+          sourceCloudIdentifier: item.sourceCloudIdentifier,
+          outputCloudIdentifier: item.createdCloudIdentifier,
+          committedAt: session.updatedAt
+        )
+      }
+      await cloudSync.recordCommittedAssets(commits)
       for item in session.items where item.state == .committed {
         processedAssetIdentifiers.insert(item.source.id)
         if let createdAssetIdentifier = item.createdAssetIdentifier {
@@ -1394,7 +1547,7 @@ private struct PreparedDownload: @unchecked Sendable {
       guard report.hasEnoughSpace else {
         destination = .queue
         queueStatusMessage =
-          "队首任务因空间不足暂停。需要 \(MediaFormatting.bytes(report.requiredBytes))，当前可用 \(MediaFormatting.bytes(report.availableBytes))。"
+          L10n("队首任务因空间不足暂停。需要 \(MediaFormatting.bytes(report.requiredBytes))，当前可用 \(MediaFormatting.bytes(report.availableBytes))。")
         await persist()
         return
       }
@@ -1403,7 +1556,7 @@ private struct PreparedDownload: @unchecked Sendable {
       start(task: next)
     } catch {
       destination = .queue
-      queueStatusMessage = "队首任务无法开始，请检查可用空间。"
+      queueStatusMessage = L10n("队首任务无法开始，请检查可用空间。")
     }
   }
 
@@ -1473,7 +1626,7 @@ private struct PreparedDownload: @unchecked Sendable {
     do {
       try await store.save(state)
     } catch {
-      notice = AppNotice(title: "无法保存任务", message: "当前进度仍保留在本机，请稍后重试。")
+      notice = AppNotice(title: L10n("无法保存任务"), message: L10n("当前进度仍保留在本机，请稍后重试。"))
     }
   }
 

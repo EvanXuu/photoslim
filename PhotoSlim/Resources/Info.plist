@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleDevelopmentRegion</key>
-    <string>zh_CN</string>
+    <string>en</string>
     <key>CFBundleDisplayName</key>
     <string>PhotoSlim</string>
     <key>CFBundleExecutable</key>
@@ -35,11 +35,13 @@
     <key>NSHumanReadableCopyright</key>
     <string>Copyright © 2026. All rights reserved.</string>
     <key>NSPhotoLibraryUsageDescription</key>
-    <string>PhotoSlim 需要扫描照片和视频、按你的选择下载 iCloud 原件、创建并验证压缩副本。原件只会在你确认后移到“最近删除”。</string>
+    <string>PhotoSlim reads your photo library, downloads selected iCloud originals, and creates compressed previews on your device. Originals are deleted only after you confirm.</string>
     <key>NSPhotoLibraryAddUsageDescription</key>
-    <string>PhotoSlim 需要把已验证的 HEIC 或 HEVC 压缩副本添加回你的照片图库。</string>
+    <string>PhotoSlim saves the compressed results you approve to your photo library.</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
+    <key>PhotoSlimCloudSyncConfigured</key>
+    <false/>
     <key>NSSupportsAutomaticTermination</key>
     <false/>
     <key>NSSupportsSuddenTermination</key>

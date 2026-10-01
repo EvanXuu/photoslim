@@ -1,3 +1,6 @@
+#if SWIFT_PACKAGE
+import PhotoSlimMediaCore
+#endif
 import Foundation
 
 enum AudioPolicy: String, Codable, CaseIterable, Identifiable, Sendable {
@@ -5,7 +8,7 @@ enum AudioPolicy: String, Codable, CaseIterable, Identifiable, Sendable {
   case aac
 
   var id: String { rawValue }
-  var title: String { self == .passthroughWhenPossible ? "优先保持原音频" : "转换为 AAC" }
+  var title: String { self == .passthroughWhenPossible ? L10n("优先保持原音频") : L10n("转换为 AAC") }
 }
 
 enum VideoEncodingMode: String, Codable, CaseIterable, Identifiable, Sendable {
@@ -16,8 +19,8 @@ enum VideoEncodingMode: String, Codable, CaseIterable, Identifiable, Sendable {
 
   var title: String {
     switch self {
-    case .automatic: return "自动"
-    case .manual: return "手动"
+    case .automatic: return L10n("自动")
+    case .manual: return L10n("手动")
     }
   }
 }
@@ -30,8 +33,8 @@ enum VideoBitrateMode: String, Codable, CaseIterable, Identifiable, Sendable {
 
   var title: String {
     switch self {
-    case .sourceRatio: return "按原件比例"
-    case .manual: return "固定平均码率"
+    case .sourceRatio: return L10n("按原件比例")
+    case .manual: return L10n("固定平均码率")
     }
   }
 }
@@ -203,14 +206,14 @@ struct CompressionSettings: Codable, Equatable, Sendable {
     let videoSummary: String
     switch videoEncodingMode {
     case .automatic:
-      videoSummary = "自动"
+      videoSummary = L10n("自动")
     case .manual:
-      videoSummary = "手动"
+      videoSummary = L10n("手动")
     }
     if mediaKind == .video {
       return videoSummary
     }
-    return "照片 \(Int(photoQuality * 100))% · 视频 \(videoSummary)"
+    return L10n("照片 \(Int(photoQuality * 100))% · 视频 \(videoSummary)")
   }
 
   var summary: String { summary(for: nil) }

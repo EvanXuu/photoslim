@@ -1,3 +1,6 @@
+#if SWIFT_PACKAGE
+import PhotoSlimMediaCore
+#endif
 import SwiftUI
 
 struct TaskProgressView: View {
@@ -7,10 +10,10 @@ struct TaskProgressView: View {
     VStack(spacing: 0) {
       HStack {
         VStack(alignment: .leading, spacing: 4) {
-          Text("正在准备压缩副本")
+          Text(L10n("正在准备压缩副本"))
             .font(.system(size: 25, weight: .semibold))
             .foregroundStyle(PhotoSlimTheme.ink)
-          Text("完成后先预览，确认后才写入相册。")
+          Text(L10n("完成后先预览，确认后才写入相册。"))
             .font(.system(size: 12))
             .foregroundStyle(.secondary)
         }
@@ -22,8 +25,8 @@ struct TaskProgressView: View {
         }
         .buttonStyle(.borderless)
         .font(.system(size: 15, weight: .medium))
-        .help("最小化任务，继续准备下一批")
-        .accessibilityLabel("最小化任务，继续准备下一批")
+        .help(L10n("最小化任务，继续准备下一批"))
+        .accessibilityLabel(L10n("最小化任务，继续准备下一批"))
         Button {
           model.terminateCurrentTask()
         } label: {
@@ -32,8 +35,8 @@ struct TaskProgressView: View {
         .buttonStyle(.borderless)
         .foregroundStyle(PhotoSlimTheme.danger)
         .font(.system(size: 14, weight: .medium))
-        .help("停止任务")
-        .accessibilityLabel("停止任务")
+        .help(L10n("停止任务"))
+        .accessibilityLabel(L10n("停止任务"))
       }
       .padding(24)
 
@@ -68,22 +71,22 @@ struct TaskProgressView: View {
         .tint(PhotoSlimTheme.signal)
       HStack(spacing: 12) {
         if session.originalBytes > 0 {
-          Text("已处理 " + MediaFormatting.bytes(session.originalBytes))
+          Text(L10n("已处理 ") + MediaFormatting.bytes(session.originalBytes))
         }
         if session.outputBytes > 0 {
-          Text("结果 " + MediaFormatting.bytes(session.outputBytes))
+          Text(L10n("结果 ") + MediaFormatting.bytes(session.outputBytes))
         }
         if let storage = model.localStorageReport {
           Spacer(minLength: 4)
-          Text("本机可用 " + MediaFormatting.bytes(storage.availableBytes))
+          Text(L10n("本机可用 ") + MediaFormatting.bytes(storage.availableBytes))
         }
       }
       .font(.system(size: 10, design: .monospaced))
       .foregroundStyle(.secondary)
       HStack {
-        Text("\(session.completedItemCount) / \(session.items.count) 个项目完成")
+        Text(L10n("\(session.completedItemCount) / \(session.items.count) 个项目完成"))
         Spacer()
-        Text("队列等待 \(model.queue.count) 批")
+        Text(L10n("队列等待 \(model.queue.count) 批"))
       }
       .font(.system(size: 11))
       .foregroundStyle(.secondary)
@@ -118,7 +121,7 @@ struct TaskProgressView: View {
         detail: downloadDetail(for: item)
       )
       progressLine(
-        title: item.source.kind == .photo ? "照片压缩" : "视频压缩",
+        title: item.source.kind == .photo ? L10n("照片压缩") : L10n("视频压缩"),
         symbol: "gearshape.2",
         value: item.compressionProgress,
         detail: "\(Int(item.compressionProgress * 100))%"
@@ -135,7 +138,7 @@ struct TaskProgressView: View {
 
   private func itemSummary(for asset: MediaAsset) -> String {
     var summary = asset.format.title
-    if asset.isPlainHVC1 { summary += " · 再次压缩" }
+    if asset.isPlainHVC1 { summary += L10n(" · 再次压缩") }
     if let inputBytes = MediaFormatting.inputBytes(for: asset) {
       summary += " · \(inputBytes)"
     }
@@ -144,9 +147,9 @@ struct TaskProgressView: View {
 
   private func downloadTitle(for asset: MediaAsset) -> String {
     switch asset.originalAvailability {
-    case .local: return "本地原件"
-    case .needsDownload: return "下载原件"
-    case .unknown: return "准备原件"
+    case .local: return L10n("本地原件")
+    case .needsDownload: return L10n("下载原件")
+    case .unknown: return L10n("准备原件")
     }
   }
 
@@ -160,7 +163,7 @@ struct TaskProgressView: View {
 
   private func downloadDetail(for item: TaskItemRecord) -> String {
     switch item.source.originalAvailability {
-    case .local: return "已就绪"
+    case .local: return L10n("已就绪")
     case .needsDownload, .unknown: return "\(Int(item.downloadProgress * 100))%"
     }
   }
@@ -188,11 +191,11 @@ struct TaskProgressView: View {
   private func taskItemsPanel(_ session: CompressionSession) -> some View {
     VStack(spacing: 0) {
       HStack {
-        Text("任务项目")
+        Text(L10n("任务项目"))
           .font(.system(size: 12, weight: .semibold))
         Spacer()
         if session.failedItemCount > 0 {
-          Text("\(session.failedItemCount) 个失败")
+          Text(L10n("\(session.failedItemCount) 个失败"))
             .font(.system(size: 10, weight: .semibold))
             .foregroundStyle(PhotoSlimTheme.danger)
         }
@@ -252,7 +255,7 @@ struct MiniTaskPanel: View {
         HStack {
           Image(systemName: "gearshape.2.fill")
             .foregroundStyle(PhotoSlimTheme.signal)
-          Text("正在压缩")
+          Text(L10n("正在压缩"))
             .font(.system(size: 12, weight: .semibold))
           Spacer()
           Button {
@@ -261,7 +264,7 @@ struct MiniTaskPanel: View {
             Image(systemName: "arrow.up.left.and.arrow.down.right")
           }
           .buttonStyle(.plain)
-          .help("展开任务")
+          .help(L10n("展开任务"))
         }
         Text(session.statusMessage)
           .font(.system(size: 11))
@@ -273,11 +276,11 @@ struct MiniTaskPanel: View {
         HStack {
           if let index = session.currentItemIndex, session.items.indices.contains(index) {
             let item = session.items[index]
-            Label("云端 \(Int(item.downloadProgress * 100))%", systemImage: "icloud.and.arrow.down")
+            Label(L10n("云端 \(Int(item.downloadProgress * 100))%"), systemImage: "icloud.and.arrow.down")
             Spacer()
-            Label("压缩 \(Int(item.compressionProgress * 100))%", systemImage: "gearshape")
+            Label(L10n("压缩 \(Int(item.compressionProgress * 100))%"), systemImage: "gearshape")
           } else {
-            Text("准备任务")
+            Text(L10n("准备任务"))
           }
         }
         .font(.system(size: 9, design: .monospaced))

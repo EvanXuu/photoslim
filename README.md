@@ -1,10 +1,21 @@
 # PhotoSlim
 
-PhotoSlim is a native macOS app for reducing the size of an Apple Photos library while keeping the original asset safe until you approve the result.
+PhotoSlim is a native Apple Photos compressor with macOS and iOS clients. It keeps every original untouched until you review and approve the compressed result.
 
 > **0.2beta** — An early release for testing with small, backed-up batches. Do not start with the only copy of important media. The downloadable app is ad-hoc signed and not notarized, so macOS may show an unidentified developer warning.
 
 [简体中文](README.zh-CN.md) · [Releases](https://github.com/EvanXuu/photoslim/releases) · [Product requirements](PRD-PhotoSlim.md) · [Design system](PhotoSlim/DESIGN_SYSTEM.md)
+
+## In development
+
+These changes are in source, not in the existing 0.2beta download:
+
+- English and Simplified Chinese interfaces, including Photos permission prompts. The app follows the preferred device language and falls back to English for other languages.
+- Container-sized iPhone grids, accessible compact actions, and pinch/double-tap zoom in photo review. With the iOS 27.1 SDK, iPhone Duo review adapts media and comparison controls around the fold.
+- Optional cross-device processed-item records in your **private** CloudKit database, to avoid compressing an already-processed item on another device. Only confirmed, completed tasks contribute records; no media is uploaded by PhotoSlim.
+- Local-only packages launch without restricted CloudKit entitlements. Cloud sync needs a matching Apple-signed app and provisioned container; local scanning, compression, and history work without it.
+
+See [CloudKit setup and verification](docs/CloudKit-setup.md) and the [unreleased changelog](CHANGELOG.md).
 
 ## What it does
 
@@ -33,6 +44,8 @@ PhotoSlim is a native macOS app for reducing the size of an Apple Photos library
 - The safety threshold defaults to 8% for new or untouched legacy settings.
 - Incremental library scans, search, filters, sorting, pinning, list/grid views, queue recovery, statistics, and task history are preserved across sessions.
 - User-facing messages describe the action, risk, and next step without exposing implementation details.
+- The macOS sort button now opens the available sort choices directly, and the library footer continuously shows available storage and total capacity.
+- Space and safety checks run silently when a task starts. On iPhone, selecting media replaces the workspace tabs with a Liquid Glass capsule containing the selection status, settings, and next action.
 
 ### Fixes
 
@@ -43,7 +56,7 @@ PhotoSlim is a native macOS app for reducing the size of an Apple Photos library
 ## Safe workflow
 
 1. Select assets.
-2. Check local space, download up to five iCloud originals, compress, and verify the files.
+2. PhotoSlim checks local space in the background, downloads up to five iCloud originals, compresses, and verifies the files.
 3. Review the generated results locally. You may undo and clean up, or approve the write.
 4. PhotoSlim creates and verifies the Photos copy.
 5. Photos asks for confirmation before the original is moved to Recently Deleted.
@@ -73,9 +86,14 @@ The prebuilt app is ad-hoc signed and not notarized. If macOS blocks the first l
 ## Requirements
 
 - macOS 14 or later.
+- iOS 17 or later for the iPhone target.
 - Permission to read and add to the Apple Photos library.
 - Enough local space for selected iCloud originals, temporary outputs, and the safety margin.
-- Xcode Command Line Tools and a Swift 6 toolchain for source builds.
+- Xcode 27 with the macOS/iOS 27 SDKs and a Swift 6 toolchain for source builds. The deployment targets remain macOS 14 and iOS 17.
+
+The installed toolchain used for this change is Xcode 27.1: its macOS SDK is 27.0, but its iOS SDK is 27.1. Apple currently lists Xcode 27 as stable and 27.1 as beta. A build with the 27.1 SDK is **not** an iOS 27.0 final-SDK validation. Duo-specific `ArrangementView` code is conditional on the 27.1/27.2 SDK and availability; a 27.0 source build uses the adaptive layout fallback. Consult [Apple's Xcode requirements](https://developer.apple.com/xcode/system-requirements) and [Duo guidance](https://developer.apple.com/iphone-duo/).
+
+The package also contains an iOS 17 SwiftUI target. It compiles the same app model, PhotoKit scanner, disk checks, compressor, queue, session recovery, statistics, history, and review/write-back workflow as the macOS app. The iPhone-specific layer is limited to native navigation and touch presentation: media selection at the top left, Filter and More at the top right, pull-down search, and four bottom workspaces. Selecting any asset temporarily replaces those workspace tabs with a capsule status bar; iOS 26 uses native Liquid Glass, while iOS 17–25 uses system material.
 
 ## Build and test from source
 
@@ -99,6 +117,16 @@ PhotoSlim/Scripts/build-app.sh
 
 The default output is `PhotoSlim/build/PhotoSlim.app` and `PhotoSlim/build/PhotoSlim.app.zip`. To use a stable signing identity, set `PHOTOSLIM_SIGNING_IDENTITY` before running the script.
 
+Build and package the universal iOS Simulator app:
+
+~~~
+PhotoSlim/Scripts/build-ios-simulator-app.sh
+~~~
+
+The simulator archive is written to `PhotoSlim/build/PhotoSlim-iOS-Simulator.app.zip`; the signed app used by `simctl` is built under `/private/tmp/PhotoSlim-iOS-Simulator-build` by default.
+
+The packaging scripts produce local-only builds by default; ad-hoc signatures cannot authorize CloudKit. For iPhone CloudKit testing, use Xcode automatic signing with a real development team and matching container. For a signed macOS CloudKit package, supply `PHOTOSLIM_CLOUDKIT_ENABLED=1`, `PHOTOSLIM_SIGNING_IDENTITY`, and `PHOTOSLIM_PROVISIONING_PROFILE` as described in the setup guide. Simulator ZIPs cannot be installed on an iPhone.
+
 ## Project structure
 
 ~~~
@@ -109,6 +137,9 @@ PhotoSlim/
 |   |-- Services/  PhotoKit, compression, disk checks, and persistence
 |   |-- Theme/     Colors, spacing, and reusable styles
 |   `-- Views/     Browser, task, review, queue, statistics, and history UI
+|-- Sources/PhotoSlimiOSClient/  Native iPhone navigation and workspace views
+|-- Sources/PhotoSlimMediaCore/ Compression capability, layout, and localization resources
+|-- PhotoSlim-iOS.xcodeproj/     iOS 17 app target using the shared sources
 |-- Tests/         Pure logic and generated-media encoding tests
 |-- Resources/     Info.plist, entitlements, and app icon
 `-- Scripts/       App packaging and icon generation
@@ -118,4 +149,4 @@ Real PhotoKit create/delete flows are not run by automated tests because they wo
 
 ## Privacy and license
 
-PhotoSlim has no telemetry or cloud service. Media processing happens locally; Photos and iCloud may perform their own network operations. PhotoSlim is open-source software available under the [MIT License](LICENSE).
+PhotoSlim has no telemetry and no PhotoSlim-operated server. Media processing happens locally; Photos and iCloud may download or sync library originals. When cross-device records are enabled in a configured build, PhotoSlim sends only stable Photos cloud identifiers, the original/result relationship, completion time, status, and record version to your own private CloudKit database. It does not send photo/video bytes, thumbnails, filenames, locations, or other media metadata. Disable record sync in compression settings to keep the ledger local. PhotoSlim is open-source software available under the [MIT License](LICENSE).

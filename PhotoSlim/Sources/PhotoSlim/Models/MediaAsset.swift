@@ -1,3 +1,6 @@
+#if SWIFT_PACKAGE
+import PhotoSlimMediaCore
+#endif
 import Foundation
 
 enum MediaKind: String, Codable, CaseIterable, Identifiable, Sendable {
@@ -5,7 +8,7 @@ enum MediaKind: String, Codable, CaseIterable, Identifiable, Sendable {
   case video
 
   var id: String { rawValue }
-  var title: String { self == .photo ? "照片" : "视频" }
+  var title: String { self == .photo ? L10n("照片") : L10n("视频") }
   var symbolName: String { self == .photo ? "photo" : "video" }
 }
 
@@ -29,8 +32,8 @@ enum MediaFormatGroup: String, Codable, CaseIterable, Identifiable, Sendable {
     case .raw: return "RAW"
     case .h264: return "H.264"
     case .hevc: return "HEVC"
-    case .other: return "其他"
-    case .unknown: return "待识别"
+    case .other: return L10n("其他")
+    case .unknown: return L10n("待识别")
     }
   }
 }
@@ -50,9 +53,9 @@ enum OriginalResourceAvailability: String, Codable, CaseIterable, Identifiable, 
 
   var title: String {
     switch self {
-    case .local: return "本地可用"
-    case .needsDownload: return "需要 iCloud 下载"
-    case .unknown: return "状态未知"
+    case .local: return L10n("本地可用")
+    case .needsDownload: return L10n("需要 iCloud 下载")
+    case .unknown: return L10n("状态未知")
     }
   }
 
@@ -86,56 +89,56 @@ enum ExclusionReason: String, Codable, CaseIterable, Identifiable, Hashable, Sen
 
   var title: String {
     switch self {
-    case .alreadyProcessed: return "已经由 PhotoSlim 处理"
-    case .efficientCodec: return "已经是高效格式"
-    case .edited: return "已编辑资产"
+    case .alreadyProcessed: return L10n("已经由 PhotoSlim 处理")
+    case .efficientCodec: return L10n("已经是高效格式")
+    case .edited: return L10n("已编辑资产")
     case .raw: return "RAW / ProRAW"
     case .livePhoto: return "Live Photo"
     case .hdr: return "HDR / Dolby Vision"
-    case .highFrameRate: return "慢动作 / 高帧率"
-    case .cinematic: return "电影效果视频"
-    case .spatial: return "空间媒体"
-    case .hidden: return "隐藏媒体"
-    case .transparencyOrAnimation: return "透明或动画图片"
-    case .screenRecording: return "屏幕录制"
-    case .lowSavings: return "旧版节省标记"
-    case .codecUnverified: return "格式待确认"
-    case .unsupported: return "暂不支持"
+    case .highFrameRate: return L10n("慢动作 / 高帧率")
+    case .cinematic: return L10n("电影效果视频")
+    case .spatial: return L10n("空间媒体")
+    case .hidden: return L10n("隐藏媒体")
+    case .transparencyOrAnimation: return L10n("透明或动画图片")
+    case .screenRecording: return L10n("屏幕录制")
+    case .lowSavings: return L10n("旧版节省标记")
+    case .codecUnverified: return L10n("格式待确认")
+    case .unsupported: return L10n("暂不支持")
     }
   }
 
   var warning: String {
     switch self {
     case .alreadyProcessed:
-      return "这个项目已经出现在已确认完成的 PhotoSlim 任务中。为避免重复有损压缩，它只能查看，不能再次加入任务。"
+      return L10n("这个项目已经出现在已确认完成的 PhotoSlim 任务中。为避免重复有损压缩，它只能查看，不能再次加入任务。")
     case .efficientCodec:
-      return "这些项目已经使用较新的格式，再压缩通常收益很小，还可能降低画质。"
+      return L10n("这些项目已经使用较新的格式，再压缩通常收益很小，还可能降低画质。")
     case .edited:
-      return "已编辑的项目可能无法完整保留调整内容，暂不处理。"
+      return L10n("已编辑的项目可能无法完整保留调整内容，暂不处理。")
     case .raw:
-      return "RAW 和 ProRAW 是数字底片。首版不会压缩或替换它们。"
+      return L10n("RAW 和 ProRAW 是数字底片。首版不会压缩或替换它们。")
     case .livePhoto:
-      return "Live Photo 包含配对照片和视频。首版不会拆分或替换它们。"
+      return L10n("Live Photo 包含配对照片和视频。首版不会拆分或替换它们。")
     case .hdr:
-      return "HDR 或 Dolby Vision 的颜色信息可能无法完整保留，暂不处理。"
+      return L10n("HDR 或 Dolby Vision 的颜色信息可能无法完整保留，暂不处理。")
     case .highFrameRate:
-      return "慢动作和高帧率视频包含特殊时间关系。首版不会处理。"
+      return L10n("慢动作和高帧率视频包含特殊时间关系。首版不会处理。")
     case .cinematic:
-      return "电影效果视频包含景深和对焦数据。首版不会处理。"
+      return L10n("电影效果视频包含景深和对焦数据。首版不会处理。")
     case .spatial:
-      return "空间媒体包含特殊轨道。首版不会处理。"
+      return L10n("空间媒体包含特殊轨道。首版不会处理。")
     case .hidden:
-      return "显示隐藏媒体可能暴露私密内容。确认后可以把受支持项目加入任务。"
+      return L10n("显示隐藏媒体可能暴露私密内容。确认后可以把受支持项目加入任务。")
     case .transparencyOrAnimation:
-      return "转换可能丢失透明通道或动画。首版不会处理。"
+      return L10n("转换可能丢失透明通道或动画。首版不会处理。")
     case .screenRecording:
-      return "屏幕录制中的细小文字和界面边缘对压缩更敏感。确认后可以处理。"
+      return L10n("屏幕录制中的细小文字和界面边缘对压缩更敏感。确认后可以处理。")
     case .lowSavings:
-      return "这是旧记录中的项目，当前不会用它限制处理。"
+      return L10n("这是旧记录中的项目，当前不会用它限制处理。")
     case .codecUnverified:
-      return "项目尚未下载到本机，格式需要下载后才能确认。"
+      return L10n("项目尚未下载到本机，格式需要下载后才能确认。")
     case .unsupported:
-      return "暂时无法安全处理这个项目。"
+      return L10n("暂时无法安全处理这个项目。")
     }
   }
 
@@ -197,11 +200,11 @@ struct MediaAsset: Identifiable, Codable, Hashable, Sendable {
   }
 
   var displayTitle: String {
-    filename.isEmpty ? (kind == .photo ? "未命名照片" : "未命名视频") : filename
+    filename.isEmpty ? (kind == .photo ? L10n("未命名照片") : L10n("未命名视频")) : filename
   }
 
   var dimensionsLabel: String {
-    pixelWidth > 0 && pixelHeight > 0 ? "\(pixelWidth) × \(pixelHeight)" : "尺寸未知"
+    pixelWidth > 0 && pixelHeight > 0 ? "\(pixelWidth) × \(pixelHeight)" : L10n("尺寸未知")
   }
 
 }

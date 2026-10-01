@@ -1,6 +1,7 @@
 import Foundation
 import CoreMedia
 import XCTest
+import PhotoSlimMediaCore
 
 @testable import PhotoSlim
 
@@ -280,12 +281,12 @@ final class PhotoSlimCoreTests: XCTestCase {
     var cloud = fixture(id: "cloud-state", kind: .video)
     cloud.isCloudOnly = true
     cloud.originalAvailability = .needsDownload
-    XCTAssertEqual(cloud.originalAvailability.title, "需要 iCloud 下载")
+    XCTAssertEqual(cloud.originalAvailability.title, L10n("需要 iCloud 下载"))
     XCTAssertEqual(cloud.originalAvailability.symbolName, "icloud.and.arrow.down")
 
     var unknown = cloud
     unknown.originalAvailability = .unknown
-    XCTAssertEqual(unknown.originalAvailability.title, "状态未知")
+    XCTAssertEqual(unknown.originalAvailability.title, L10n("状态未知"))
     XCTAssertEqual(unknown.originalAvailability.symbolName, "questionmark.icloud")
 
     let data = try JSONEncoder().encode(unknown)

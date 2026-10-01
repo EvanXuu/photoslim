@@ -1,3 +1,6 @@
+#if SWIFT_PACKAGE
+import PhotoSlimMediaCore
+#endif
 import SwiftUI
 
 struct SidebarView: View {
@@ -6,17 +9,17 @@ struct SidebarView: View {
   var body: some View {
     VStack(spacing: 0) {
       List(selection: $model.destination) {
-        Section("媒体类型") {
+        Section(L10n("媒体类型")) {
           navigationRow(.library)
           navigationRow(.photos)
           navigationRow(.videos)
         }
 
-        Section("图库") {
+        Section(L10n("图库")) {
           navigationRow(.favorites)
         }
 
-        Section("工作区") {
+        Section(L10n("工作区")) {
           navigationRow(.queue, badge: model.queue.count)
           navigationRow(.statistics)
           navigationRow(.history)
@@ -33,7 +36,7 @@ struct SidebarView: View {
         .foregroundStyle(
           model.accessState.canRead ? PhotoSlimTheme.success : PhotoSlimTheme.warning)
         VStack(alignment: .leading, spacing: 2) {
-          Text("Apple 照片")
+          Text(L10n("Apple 照片"))
             .font(.system(size: 11, weight: .semibold))
           Text(model.accessState.title)
             .font(.system(size: 10))

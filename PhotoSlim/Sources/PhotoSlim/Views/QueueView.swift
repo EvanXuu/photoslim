@@ -1,3 +1,6 @@
+#if SWIFT_PACKAGE
+import PhotoSlimMediaCore
+#endif
 import SwiftUI
 
 struct QueueView: View {
@@ -13,9 +16,9 @@ struct QueueView: View {
           Image(systemName: "list.bullet.rectangle.portrait")
             .font(.system(size: 34, weight: .light))
             .foregroundStyle(.secondary)
-          Text("准备队列为空")
+          Text(L10n("准备队列为空"))
             .font(.system(size: 16, weight: .semibold))
-          Text("正在处理其他任务时，可以把下一批项目放在这里。")
+          Text(L10n("正在处理其他任务时，可以把下一批项目放在这里。"))
             .font(.system(size: 11))
             .foregroundStyle(.secondary)
         }
@@ -37,9 +40,9 @@ struct QueueView: View {
   private var pageHeader: some View {
     HStack {
       VStack(alignment: .leading, spacing: 4) {
-        Text("准备队列")
+        Text(L10n("准备队列"))
           .font(.system(size: 24, weight: .semibold))
-        Text("下一批会在当前任务完成后开始。")
+        Text(L10n("下一批会在当前任务完成后开始。"))
           .font(.system(size: 11))
           .foregroundStyle(.secondary)
         if let message = model.queueStatusMessage {
@@ -51,10 +54,10 @@ struct QueueView: View {
       }
       Spacer()
       if model.currentSession == nil, !model.queue.isEmpty {
-        Button("重新检查并开始队首任务") { model.retryStartingQueue() }
+        Button(L10n("重新检查并开始队首任务")) { model.retryStartingQueue() }
           .buttonStyle(SignalButtonStyle())
       } else if let session = model.currentSession {
-        Label(session.phase == .reviewPending ? "等待当前审核" : "当前任务处理中", systemImage: "hourglass")
+        Label(session.phase == .reviewPending ? L10n("等待当前审核") : L10n("当前任务处理中"), systemImage: "hourglass")
           .font(.system(size: 11, weight: .medium))
           .foregroundStyle(.secondary)
       }
@@ -80,7 +83,7 @@ private struct QueueTaskCard: View {
           .background(PhotoSlimTheme.signalSoft)
           .clipShape(Circle())
         VStack(alignment: .leading, spacing: 4) {
-          Text("\(task.assets.count) 个项目")
+          Text(L10n("\(task.assets.count) 个项目"))
             .font(.system(size: 13, weight: .semibold))
           Text(queueSizeSummary)
           .font(.system(size: 10))
@@ -102,7 +105,7 @@ private struct QueueTaskCard: View {
           Image(systemName: "trash")
         }
         .buttonStyle(.plain)
-        .help("从队列移除")
+        .help(L10n("从队列移除"))
       }
       .padding(14)
 
@@ -139,10 +142,10 @@ private struct QueueTaskCard: View {
   private var queueSizeSummary: String {
     var parts: [String] = []
     if task.knownInputBytes > 0 {
-      parts.append("文件 \(MediaFormatting.bytes(task.knownInputBytes))")
+      parts.append(L10n("文件 \(MediaFormatting.bytes(task.knownInputBytes))"))
     }
     if task.cloudAssetCount > 0 {
-      parts.append("云端项目 \(task.cloudAssetCount) 个")
+      parts.append(L10n("云端项目 \(task.cloudAssetCount) 个"))
     }
     return parts.joined(separator: " · ")
   }

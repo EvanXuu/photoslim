@@ -1,3 +1,6 @@
+#if SWIFT_PACKAGE
+import PhotoSlimMediaCore
+#endif
 import Foundation
 
 enum TimeFilter: String, Codable, CaseIterable, Identifiable, Sendable {
@@ -12,12 +15,12 @@ enum TimeFilter: String, Codable, CaseIterable, Identifiable, Sendable {
 
   var title: String {
     switch self {
-    case .all: return "全部时间"
-    case .recentYear: return "1 年以上"
-    case .recentThreeYears: return "3 年以上"
-    case .olderThanFiveYears: return "5 年以上"
-    case .customOlderThan: return "自定义年数以上"
-    case .custom: return "手动日期范围"
+    case .all: return L10n("全部时间")
+    case .recentYear: return L10n("1 年以上")
+    case .recentThreeYears: return L10n("3 年以上")
+    case .olderThanFiveYears: return L10n("5 年以上")
+    case .customOlderThan: return L10n("自定义年数以上")
+    case .custom: return L10n("手动日期范围")
     }
   }
 }
@@ -44,13 +47,13 @@ enum SizeFilter: String, Codable, CaseIterable, Identifiable, Sendable {
 
   var title: String {
     switch self {
-    case .all: return "全部大小"
-    case .under10MB: return "10 MB 以上"
-    case .tenToHundredMB: return "100 MB 以上"
+    case .all: return L10n("全部大小")
+    case .under10MB: return L10n("10 MB 以上")
+    case .tenToHundredMB: return L10n("100 MB 以上")
     case .hundredMBToOneGB: return "100 MB–1 GB"
-    case .overOneGB: return "1 GB 以上"
-    case .customMinimum: return "自定义大小以上"
-    case .custom: return "手动大小范围"
+    case .overOneGB: return L10n("1 GB 以上")
+    case .customMinimum: return L10n("自定义大小以上")
+    case .custom: return L10n("手动大小范围")
     }
   }
 }
@@ -63,9 +66,9 @@ enum CloudFilter: String, Codable, CaseIterable, Identifiable, Sendable {
   var id: String { rawValue }
   var title: String {
     switch self {
-    case .all: return "本地与 iCloud"
-    case .local: return "本地可用"
-    case .cloud: return "需要 iCloud"
+    case .all: return L10n("本地与 iCloud")
+    case .local: return L10n("本地可用")
+    case .cloud: return L10n("需要 iCloud")
     }
   }
 }
@@ -85,13 +88,13 @@ enum SortOption: String, Codable, CaseIterable, Identifiable, Sendable {
 
   var title: String {
     switch self {
-    case .savingsLargest: return "旧版排序（已停用）"
-    case .savingsPercent: return "旧版比例排序（已停用）"
-    case .sizeLargest: return "原文件大小"
-    case .dateNewest: return "拍摄日期（新到旧）"
-    case .dateOldest: return "拍摄日期（旧到新）"
-    case .durationLongest: return "时长"
-    case .filename: return "文件名"
+    case .savingsLargest: return L10n("旧版排序（已停用）")
+    case .savingsPercent: return L10n("旧版比例排序（已停用）")
+    case .sizeLargest: return L10n("原文件大小")
+    case .dateNewest: return L10n("拍摄日期（新到旧）")
+    case .dateOldest: return L10n("拍摄日期（旧到新）")
+    case .durationLongest: return L10n("时长")
+    case .filename: return L10n("文件名")
     }
   }
 

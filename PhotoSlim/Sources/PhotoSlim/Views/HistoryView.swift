@@ -1,3 +1,6 @@
+#if SWIFT_PACKAGE
+import PhotoSlimMediaCore
+#endif
 import SwiftUI
 
 struct HistoryView: View {
@@ -7,9 +10,9 @@ struct HistoryView: View {
     VStack(spacing: 0) {
       HStack {
         VStack(alignment: .leading, spacing: 4) {
-          Text("任务历史")
+          Text(L10n("任务历史"))
             .font(.system(size: 24, weight: .semibold))
-          Text("这里会保留每次任务的完成结果。")
+          Text(L10n("这里会保留每次任务的完成结果。"))
             .font(.system(size: 11))
             .foregroundStyle(.secondary)
         }
@@ -24,7 +27,7 @@ struct HistoryView: View {
           Image(systemName: "clock.arrow.circlepath")
             .font(.system(size: 32, weight: .light))
             .foregroundStyle(.secondary)
-          Text("暂无任务历史")
+          Text(L10n("暂无任务历史"))
             .font(.system(size: 15, weight: .semibold))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -54,7 +57,7 @@ struct HistoryView: View {
         Text(outcomeTitle(record.outcome))
           .font(.system(size: 12, weight: .semibold))
         Text(
-          "\(MediaFormatting.date(record.startedAt)) · \(record.itemCount) 个项目 · \(record.failedCount) 个失败"
+          L10n("\(MediaFormatting.date(record.startedAt)) · \(record.itemCount) 个项目 · \(record.failedCount) 个失败")
         )
         .font(.system(size: 9))
         .foregroundStyle(.secondary)
@@ -63,8 +66,8 @@ struct HistoryView: View {
       VStack(alignment: .trailing, spacing: 4) {
         Text(
           record.outcome == .committed
-            ? "节省 \(MediaFormatting.bytes(max(0, record.originalBytes - record.outputBytes)))"
-            : "未计入节省"
+            ? L10n("节省 \(MediaFormatting.bytes(max(0, record.originalBytes - record.outputBytes)))")
+            : L10n("未计入节省")
         )
         .font(.system(size: 11, weight: .semibold, design: .monospaced))
         .foregroundStyle(record.outcome == .committed ? PhotoSlimTheme.signal : Color.secondary)
@@ -72,7 +75,7 @@ struct HistoryView: View {
           .font(.system(size: 9))
           .foregroundStyle(.secondary)
         if model.pendingCleanupSessionID == record.id {
-          Button("重试清理") { model.retryPendingCleanup() }
+          Button(L10n("重试清理")) { model.retryPendingCleanup() }
             .font(.system(size: 10, weight: .medium))
         }
       }
@@ -83,11 +86,11 @@ struct HistoryView: View {
 
   private func outcomeTitle(_ phase: SessionPhase) -> String {
     switch phase {
-    case .committed: return "已确认删除原件"
-    case .rolledBack: return "已撤回压缩副本"
-    case .cancelled: return "已终止并清理临时文件"
-    case .failed: return "任务失败"
-    default: return "未完成任务"
+    case .committed: return L10n("已确认删除原件")
+    case .rolledBack: return L10n("已撤回压缩副本")
+    case .cancelled: return L10n("已终止并清理临时文件")
+    case .failed: return L10n("任务失败")
+    default: return L10n("未完成任务")
     }
   }
 

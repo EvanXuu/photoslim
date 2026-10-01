@@ -1,3 +1,6 @@
+#if SWIFT_PACKAGE
+import PhotoSlimMediaCore
+#endif
 import AppKit
 import SwiftUI
 
@@ -26,13 +29,9 @@ struct RootView: View {
       }
     }
     .animation(.easeInOut(duration: 0.18), value: model.isTaskPanelMinimized)
-    .sheet(item: $model.pendingTask, onDismiss: model.cancelPreparedTask) { _ in
-      DiskPreflightView()
-        .environmentObject(model)
-    }
     .alert(item: $model.notice) { notice in
       Alert(
-        title: Text(notice.title), message: Text(notice.message), dismissButton: .default(Text("好"))
+        title: Text(notice.title), message: Text(notice.message), dismissButton: .default(Text(L10n("好")))
       )
     }
     .overlay(alignment: .topLeading) {
@@ -44,26 +43,26 @@ struct RootView: View {
 
   private var windowTitle: String {
     switch model.destination {
-    case .library: return "全部媒体"
-    case .photos: return "照片"
-    case .videos: return "视频"
-    case .favorites: return "收藏"
-    case .queue: return "准备队列"
-    case .statistics: return "统计"
-    case .history: return "任务历史"
+    case .library: return L10n("全部媒体")
+    case .photos: return L10n("照片")
+    case .videos: return L10n("视频")
+    case .favorites: return L10n("收藏")
+    case .queue: return L10n("准备队列")
+    case .statistics: return L10n("统计")
+    case .history: return L10n("任务历史")
     }
   }
 
   private var windowSubtitle: String {
     switch model.destination {
     case .library, .photos, .videos, .favorites:
-      return "\(model.visibleAssets.count) 个项目"
+      return L10n("\(model.visibleAssets.count) 个项目")
     case .queue:
-      return "\(model.queue.count) 批待处理"
+      return L10n("\(model.queue.count) 批待处理")
     case .statistics:
-      return "已节省空间"
+      return L10n("已节省空间")
     case .history:
-      return "\(model.history.count) 条记录"
+      return L10n("\(model.history.count) 条记录")
     }
   }
 

@@ -1,3 +1,6 @@
+#if SWIFT_PACKAGE
+import PhotoSlimMediaCore
+#endif
 import AVFoundation
 import AppKit
 import SwiftUI
@@ -28,11 +31,11 @@ struct ReviewView: View {
       }
     }
     .background(PhotoSlimTheme.canvas)
-    .alert("撤回本任务的压缩副本？", isPresented: $confirmsRollback) {
-      Button("取消", role: .cancel) {}
-      Button("撤回压缩副本", role: .destructive) { model.rollbackCompressedCopies() }
+    .alert(L10n("撤回本任务的压缩副本？"), isPresented: $confirmsRollback) {
+      Button(L10n("取消"), role: .cancel) {}
+      Button(L10n("撤回压缩副本"), role: .destructive) { model.rollbackCompressedCopies() }
     } message: {
-      Text("本次生成的结果会被清理；原件保持不动。")
+      Text(L10n("本次生成的结果会被清理；原件保持不动。"))
     }
     .sheet(item: $selectedItem) { item in
       ReviewDetailView(item: item)
@@ -58,14 +61,14 @@ struct ReviewView: View {
           .foregroundStyle(PhotoSlimTheme.signal)
       }
       VStack(alignment: .leading, spacing: 4) {
-        Text("压缩结果已准备好")
+        Text(L10n("压缩结果已准备好"))
           .font(.system(size: 24, weight: .semibold))
-        Text("压缩结果暂时保存在本机。确认无误后才会写入相册；原件目前安全保留。")
+        Text(L10n("压缩结果暂时保存在本机。确认无误后才会写入相册；原件目前安全保留。"))
           .font(.system(size: 12))
           .foregroundStyle(.secondary)
       }
       Spacer()
-      Label("按住“查看原图”或键盘 \\ 对比", systemImage: "rectangle.on.rectangle")
+      Label(L10n("按住“查看原图”或键盘 \\ 对比"), systemImage: "rectangle.on.rectangle")
         .font(.system(size: 11, weight: .medium))
         .foregroundStyle(.secondary)
     }
@@ -76,19 +79,19 @@ struct ReviewView: View {
   private func summaryPanel(_ session: CompressionSession) -> some View {
     HStack(spacing: 0) {
       summaryMetric(
-        "待写入结果",
+        L10n("待写入结果"),
         "\(session.verifiedItems.count)",
         symbol: "checkmark.seal")
       Divider().frame(height: 46)
       summaryMetric(
-        "原件大小", MediaFormatting.bytes(session.verifiedOriginalBytes), symbol: "externaldrive")
+        L10n("原件大小"), MediaFormatting.bytes(session.verifiedOriginalBytes), symbol: "externaldrive")
       Divider().frame(height: 46)
       summaryMetric(
-        "压缩后", MediaFormatting.bytes(session.verifiedOutputBytes), symbol: "arrow.down.right.circle"
+        L10n("压缩后"), MediaFormatting.bytes(session.verifiedOutputBytes), symbol: "arrow.down.right.circle"
       )
       Divider().frame(height: 46)
       summaryMetric(
-        "实际节省", MediaFormatting.bytes(session.verifiedSavedBytes),
+        L10n("实际节省"), MediaFormatting.bytes(session.verifiedSavedBytes),
         symbol: "chart.line.downtrend.xyaxis")
     }
     .padding(.vertical, 18)
@@ -110,14 +113,14 @@ struct ReviewView: View {
 
   private var reviewInstructions: some View {
     VStack(alignment: .leading, spacing: 10) {
-      Text("检查建议")
+      Text(L10n("检查建议"))
         .font(.system(size: 13, weight: .semibold))
       HStack(alignment: .top, spacing: 22) {
-        instruction("1", "先在下方网格检查压缩结果；点击项目可单独放大。")
-        instruction("2", "按住“查看原图”或键盘 \\，比较清晰度、颜色和画面。")
-        instruction("3", "确认无误后写入相册，系统会直接确认删除原件。")
+        instruction("1", L10n("先在下方网格检查压缩结果；点击项目可单独放大。"))
+        instruction("2", L10n("按住“查看原图”或键盘 \\，比较清晰度、颜色和画面。"))
+        instruction("3", L10n("确认无误后写入相册，系统会直接确认删除原件。"))
       }
-      Label("拍摄日期、位置、收藏和相簿信息会尽量保留；原件的添加时间可能变化。", systemImage: "info.circle")
+      Label(L10n("拍摄日期、位置、收藏和相簿信息会尽量保留；原件的添加时间可能变化。"), systemImage: "info.circle")
         .font(.system(size: 10))
         .foregroundStyle(.secondary)
         .padding(.top, 2)
@@ -131,15 +134,15 @@ struct ReviewView: View {
     let items = session.verifiedItems
     return VStack(alignment: .leading, spacing: 12) {
       HStack {
-        Text("压缩结果")
+        Text(L10n("压缩结果"))
           .font(.system(size: 15, weight: .semibold))
         Spacer()
-        Text("按住查看原图 · 键盘 \\")
+        Text(L10n("按住查看原图 · 键盘 \\"))
           .font(.system(size: 10, design: .monospaced))
           .foregroundStyle(.secondary)
       }
       if items.isEmpty {
-        Text("没有可供预览的压缩结果。原件未修改。")
+        Text(L10n("没有可供预览的压缩结果。原件未修改。"))
           .font(.system(size: 12))
           .foregroundStyle(.secondary)
           .frame(maxWidth: .infinity, alignment: .leading)
@@ -190,12 +193,12 @@ struct ReviewView: View {
   private func itemPanel(_ session: CompressionSession) -> some View {
     VStack(spacing: 0) {
       HStack {
-        Text("本任务项目")
+        Text(L10n("本任务项目"))
           .font(.system(size: 12, weight: .semibold))
         Spacer()
         if session.failedItemCount > 0 {
           Label(
-            "\(session.failedItemCount) 个失败项目会保留原件", systemImage: "exclamationmark.triangle.fill"
+            L10n("\(session.failedItemCount) 个失败项目会保留原件"), systemImage: "exclamationmark.triangle.fill"
           )
           .font(.system(size: 10, weight: .medium))
           .foregroundStyle(PhotoSlimTheme.warning)
@@ -212,7 +215,7 @@ struct ReviewView: View {
             Text(item.source.displayTitle)
               .font(.system(size: 11, weight: .semibold))
               .lineLimit(1)
-            Text(item.errorMessage ?? "结果已检查，写入相册后会再次确认信息")
+            Text(item.errorMessage ?? L10n("结果已检查，写入相册后会再次确认信息"))
               .font(.system(size: 9))
               .foregroundStyle(item.state == .failed ? PhotoSlimTheme.danger : Color.secondary)
               .lineLimit(1)
@@ -246,14 +249,14 @@ struct ReviewView: View {
           .font(.system(size: 11))
           .foregroundStyle(.secondary)
       } else {
-        Text("撤回会保留原件；确认删除后，原件会移到“最近删除”。")
+        Text(L10n("撤回会保留原件；确认删除后，原件会移到“最近删除”。"))
           .font(.system(size: 10))
           .foregroundStyle(.secondary)
       }
       Spacer()
-      Button("撤回压缩副本") { confirmsRollback = true }
+      Button(L10n("撤回压缩副本")) { confirmsRollback = true }
         .disabled(session.phase != .reviewPending)
-      Button("确认删除原件") { model.commitAndDeleteOriginals() }
+      Button(L10n("确认删除原件")) { model.commitAndDeleteOriginals() }
         .buttonStyle(SignalButtonStyle())
         .disabled(
           session.phase != .reviewPending || session.items.allSatisfy { $0.state == .failed })
@@ -287,7 +290,7 @@ private struct ReviewPreviewCard: View {
             isOriginal: showingOriginal
           )
           if showingOriginal {
-            Text("原图")
+            Text(L10n("原图"))
               .font(.system(size: 10, weight: .semibold))
               .foregroundStyle(.white)
               .padding(.horizontal, 7)
@@ -304,7 +307,7 @@ private struct ReviewPreviewCard: View {
         Button {
           // The comparison is intentionally driven by the press state below.
         } label: {
-          Label("查看原图", systemImage: "rectangle.on.rectangle")
+          Label(L10n("查看原图"), systemImage: "rectangle.on.rectangle")
         }
         .buttonStyle(.bordered)
         .controlSize(.small)
@@ -367,7 +370,7 @@ private struct ReviewDetailView: View {
         VStack(alignment: .leading, spacing: 3) {
           Text(item.source.displayTitle)
             .font(.system(size: 17, weight: .semibold))
-          Text("按住“查看原图”或键盘 \\ 对比；可缩放和平移结果")
+          Text(L10n("按住“查看原图”或键盘 \\ 对比；可缩放和平移结果"))
             .font(.system(size: 11))
             .foregroundStyle(.secondary)
         }
@@ -375,7 +378,7 @@ private struct ReviewDetailView: View {
         Button {
           // Press state below controls the actual before/after image.
         } label: {
-          Label("查看原图", systemImage: "rectangle.on.rectangle")
+          Label(L10n("查看原图"), systemImage: "rectangle.on.rectangle")
         }
         .buttonStyle(.borderedProminent)
         .onLongPressGesture(
@@ -430,13 +433,13 @@ private struct ReviewPreviewImage: View {
         VStack(spacing: 8) {
           Image(systemName: kind.symbolName)
             .font(.system(size: 30, weight: .light))
-          Text(isOriginal ? "正在加载原图" : "正在加载压缩结果")
+          Text(isOriginal ? L10n("正在加载原图") : L10n("正在加载压缩结果"))
             .font(.system(size: 10))
         }
         .foregroundStyle(.secondary)
       }
       if kind == .video {
-        Label("视频首帧", systemImage: "play.rectangle")
+        Label(L10n("视频首帧"), systemImage: "play.rectangle")
           .font(.system(size: 9, weight: .medium))
           .foregroundStyle(.secondary)
           .padding(7)
@@ -464,7 +467,7 @@ private struct ZoomableReviewPreview: View {
   var body: some View {
     VStack(spacing: 8) {
       HStack(spacing: 8) {
-        Label(isOriginal ? "原图" : "压缩结果", systemImage: isOriginal ? "photo" : "arrow.down.right.circle")
+        Label(isOriginal ? L10n("原图") : L10n("压缩结果"), systemImage: isOriginal ? "photo" : "arrow.down.right.circle")
           .font(.system(size: 10, weight: .medium))
           .foregroundStyle(.secondary)
         Spacer()
@@ -475,7 +478,7 @@ private struct ZoomableReviewPreview: View {
         }
         .buttonStyle(.bordered)
         .controlSize(.small)
-        .accessibilityLabel("缩小")
+        .accessibilityLabel(L10n("缩小"))
         .disabled(zoom <= 1)
         Text("\(Int(zoom * 100))%")
           .font(.system(size: 10, design: .monospaced))
@@ -488,9 +491,9 @@ private struct ZoomableReviewPreview: View {
         }
         .buttonStyle(.bordered)
         .controlSize(.small)
-        .accessibilityLabel("放大")
+        .accessibilityLabel(L10n("放大"))
         .disabled(zoom >= 5)
-        Button("适合窗口") {
+        Button(L10n("适合窗口")) {
           resetZoom()
         }
         .buttonStyle(.borderless)
@@ -534,7 +537,7 @@ private struct ZoomableReviewPreview: View {
         )
       }
       .frame(minHeight: 360)
-      Text("拖动查看 · 使用按钮缩放")
+      Text(L10n("拖动查看 · 使用按钮缩放"))
         .font(.system(size: 10))
         .foregroundStyle(.tertiary)
     }
@@ -655,9 +658,9 @@ struct FailedSessionView: View {
       Image(systemName: "exclamationmark.triangle.fill")
         .font(.system(size: 38))
         .foregroundStyle(PhotoSlimTheme.warning)
-      Text("没有生成可预览的结果")
+      Text(L10n("没有生成可预览的结果"))
         .font(.system(size: 23, weight: .semibold))
-      Text(model.currentSession?.statusMessage ?? "任务失败")
+      Text(model.currentSession?.statusMessage ?? L10n("任务失败"))
         .font(.system(size: 12))
         .foregroundStyle(.secondary)
         .multilineTextAlignment(.center)
@@ -670,7 +673,7 @@ struct FailedSessionView: View {
               Image(systemName: "xmark.circle.fill").foregroundStyle(PhotoSlimTheme.danger)
               Text(item.source.displayTitle).lineLimit(1)
               Spacer()
-              Text(item.errorMessage ?? "未完成")
+              Text(item.errorMessage ?? L10n("未完成"))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             }
@@ -685,8 +688,8 @@ struct FailedSessionView: View {
       }
 
       HStack {
-        Button("结束失败任务") { model.finishFailedSession() }
-        Button("重试") { model.retryFailedSession() }
+        Button(L10n("结束失败任务")) { model.finishFailedSession() }
+        Button(L10n("重试")) { model.retryFailedSession() }
           .buttonStyle(SignalButtonStyle())
       }
     }
