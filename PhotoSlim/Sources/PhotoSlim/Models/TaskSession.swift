@@ -1,3 +1,6 @@
+#if SWIFT_PACKAGE
+import PhotoSlimMediaCore
+#endif
 import Foundation
 
 enum SessionPhase: String, Codable, Sendable {
@@ -36,20 +39,20 @@ enum TaskItemState: String, Codable, Sendable {
 
   var title: String {
     switch self {
-    case .selected: return "等待"
-    case .downloading: return "下载原件"
-    case .transcoding: return "正在压缩"
-    case .fileVerified: return "预览就绪"
-    case .importing: return "正在导入"
-    case .imported: return "已导入"
-    case .metadataVerified: return "信息已检查"
-    case .reviewPending: return "等待审核"
-    case .committing: return "正在写入并删除原件"
-    case .committed: return "已写入相册"
-    case .rollingBack: return "正在撤回副本"
-    case .rolledBack: return "已撤回"
-    case .cancelled: return "已终止"
-    case .failed: return "失败"
+    case .selected: return L10n("等待")
+    case .downloading: return L10n("下载原件")
+    case .transcoding: return L10n("正在压缩")
+    case .fileVerified: return L10n("预览就绪")
+    case .importing: return L10n("正在导入")
+    case .imported: return L10n("已导入")
+    case .metadataVerified: return L10n("信息已检查")
+    case .reviewPending: return L10n("等待审核")
+    case .committing: return L10n("正在写入并删除原件")
+    case .committed: return L10n("已写入相册")
+    case .rollingBack: return L10n("正在撤回副本")
+    case .rolledBack: return L10n("已撤回")
+    case .cancelled: return L10n("已终止")
+    case .failed: return L10n("失败")
     }
   }
 
@@ -71,6 +74,8 @@ struct TaskItemRecord: Identifiable, Codable, Hashable, Sendable {
   let id: UUID
   var source: MediaAsset
   var createdAssetIdentifier: String?
+  var sourceCloudIdentifier: String?
+  var createdCloudIdentifier: String?
   var temporaryFilename: String?
   var state: TaskItemState
   var progress: Double
@@ -140,7 +145,7 @@ struct CompressionSession: Identifiable, Codable, Sendable {
     self.settings = settings
     items = assets.map(TaskItemRecord.init)
     currentItemIndex = nil
-    statusMessage = "准备任务"
+    statusMessage = L10n("准备任务")
   }
 
   var completedItemCount: Int {

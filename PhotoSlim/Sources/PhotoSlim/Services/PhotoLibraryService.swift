@@ -1,3 +1,6 @@
+#if SWIFT_PACKAGE
+import PhotoSlimMediaCore
+#endif
 import AVFoundation
 import Combine
 import CoreLocation
@@ -23,11 +26,11 @@ enum LibraryAccessState: Equatable, Sendable {
 
   var title: String {
     switch self {
-    case .notDetermined: return "尚未授权"
-    case .authorized: return "已允许访问所有照片"
-    case .limited: return "仅允许部分照片"
-    case .denied: return "照片访问已关闭"
-    case .restricted: return "照片访问受系统限制"
+    case .notDetermined: return L10n("尚未授权")
+    case .authorized: return L10n("已允许访问所有照片")
+    case .limited: return L10n("仅允许部分照片")
+    case .denied: return L10n("照片访问已关闭")
+    case .restricted: return L10n("照片访问受系统限制")
     }
   }
 }
@@ -42,15 +45,15 @@ enum PhotoLibraryError: LocalizedError {
   var errorDescription: String? {
     switch self {
     case .accessDenied:
-      return "PhotoSlim 没有访问照片图库的权限。"
+      return L10n("PhotoSlim 没有访问照片图库的权限。")
     case .assetNotFound:
-      return "找不到所选项目。"
+      return L10n("找不到所选项目。")
     case .originalUnavailable(let name):
-      return "无法读取原件：\(name)"
+      return L10n("无法读取原件：\(name)")
     case .photoKit:
-      return "照片图库操作失败，请稍后重试。"
+      return L10n("照片图库操作失败，请稍后重试。")
     case .verificationFailed:
-      return "压缩结果检查未通过，原件未修改。"
+      return L10n("压缩结果检查未通过，原件未修改。")
     }
   }
 }
@@ -218,7 +221,7 @@ private final class ResourceFileWriter: @unchecked Sendable {
 
   init(url: URL) throws {
     guard FileManager.default.createFile(atPath: url.path, contents: nil) else {
-      throw PhotoLibraryError.photoKit("无法创建原始资源临时文件。")
+      throw PhotoLibraryError.photoKit(L10n("无法创建原始资源临时文件。"))
     }
     handle = try FileHandle(forWritingTo: url)
   }
@@ -393,7 +396,7 @@ final class PhotoLibraryService: @unchecked Sendable {
   ) async throws -> [MediaAsset] {
     guard authorizationState.canRead else { throw PhotoLibraryError.accessDenied }
     if let identifiers, identifiers.isEmpty {
-      progress(0, 0, "图库没有变更")
+      progress(0, 0, L10n("图库没有变更"))
       return []
     }
 
@@ -416,7 +419,7 @@ final class PhotoLibraryService: @unchecked Sendable {
       let asset = result.object(at: index)
       let resources = PHAssetResource.assetResources(for: asset)
       let primary = primaryResource(for: asset, resources: resources)
-      let filename = primary?.originalFilename ?? "未命名项目"
+      let filename = primary?.originalFilename ?? L10n("未命名项目")
       progress(index, result.count, filename)
 
       var reasons = staticExclusionReasons(for: asset, resources: resources, primary: primary)
@@ -496,7 +499,7 @@ final class PhotoLibraryService: @unchecked Sendable {
         ))
     }
 
-    progress(result.count, result.count, "扫描完成")
+    progress(result.count, result.count, L10n("扫描完成"))
     return scanned
   }
 
@@ -576,8 +579,8 @@ final class PhotoLibraryService: @unchecked Sendable {
 
     let status =
       changedAssets.isEmpty && deletedIdentifiers.isEmpty
-      ? "图库没有变更"
-      : "增量扫描完成"
+      ? L10n("图库没有变更")
+      : L10n("增量扫描完成")
     progress(changedAssets.count, changedAssets.count, status)
     return LibraryScanResult(
       assets: Self.sortAssets(Array(assetsByIdentifier.values)),
@@ -614,7 +617,7 @@ final class PhotoLibraryService: @unchecked Sendable {
         from: data
       )
     else {
-      throw PhotoLibraryError.photoKit("无法读取照片图库增量扫描标记。")
+      throw PhotoLibraryError.photoKit(L10n("无法读取照片图库增量扫描标记。"))
     }
 
     let fetchResult = try PHPhotoLibrary.shared().fetchPersistentChanges(since: token)
@@ -965,6 +968,42 @@ final class PhotoLibraryService: @unchecked Sendable {
     return knownOriginalResourceBytes(for: asset, resources: resources)
   }
 
+  /// Resolves local Photos identifiers to serialized identifiers that remain
+  /// stable when the same iCloud Photos asset appears on another device.
+  /// Failed or uncertain mappings are intentionally omitted.
+  func cloudIdentifiers(forLocalIdentifiers localIdentifiers: [String]) -> [String: String] {
+    guard authorizationState.canRead, !localIdentifiers.isEmpty else { return [:] }
+    let mappings = PHPhotoLibrary.shared().cloudIdentifierMappings(
+      forLocalIdentifiers: Array(Set(localIdentifiers))
+    )
+    return mappings.reduce(into: [:]) { result, pair in
+      guard case .success(let identifier) = pair.value else { return }
+      result[pair.key] = identifier.stringValue
+    }
+  }
+
+  func existingLocalIdentifiers(_ identifiers: [String]) -> Set<String> {
+    guard authorizationState.canRead, !identifiers.isEmpty else { return [] }
+    let options = PHFetchOptions()
+    options.includeHiddenAssets = true
+    let result = PHAsset.fetchAssets(withLocalIdentifiers: Array(Set(identifiers)), options: options)
+    var existing: Set<String> = []
+    result.enumerateObjects { asset, _, _ in existing.insert(asset.localIdentifier) }
+    return existing
+  }
+
+  /// Resolves serialized iCloud Photos identifiers into identifiers for the
+  /// currently open local library. Ambiguous and missing mappings are omitted.
+  func localIdentifiers(forCloudIdentifiers cloudIdentifiers: [String]) -> Set<String> {
+    guard authorizationState.canRead, !cloudIdentifiers.isEmpty else { return [] }
+    let identifiers = Array(Set(cloudIdentifiers)).map(PHCloudIdentifier.init(stringValue:))
+    let mappings = PHPhotoLibrary.shared().localIdentifierMappings(for: identifiers)
+    return mappings.values.reduce(into: Set<String>()) { result, mapping in
+      guard case .success(let identifier) = mapping else { return }
+      result.insert(identifier)
+    }
+  }
+
   func importCompressedAsset(
     fileURL: URL,
     originalFilename: String,
@@ -1009,7 +1048,7 @@ final class PhotoLibraryService: @unchecked Sendable {
     }
 
     guard let placeholderIdentifier else {
-      throw PhotoLibraryError.photoKit("照片图库没有返回新资产标识。")
+      throw PhotoLibraryError.photoKit(L10n("照片图库没有返回新资产标识。"))
     }
     return placeholderIdentifier
   }
@@ -1021,7 +1060,7 @@ final class PhotoLibraryService: @unchecked Sendable {
   ) async throws -> ImportedAssetVerification {
     let created = try fetchAsset(identifier: identifier)
     guard created.mediaType == (source.kind == .photo ? .image : .video) else {
-      throw PhotoLibraryError.verificationFailed("媒体类型不一致")
+      throw PhotoLibraryError.verificationFailed(L10n("媒体类型不一致"))
     }
     let dimensionsMatch =
       source.kind == .video
@@ -1033,30 +1072,30 @@ final class PhotoLibraryService: @unchecked Sendable {
       )
       : created.pixelWidth == source.pixelWidth && created.pixelHeight == source.pixelHeight
     guard dimensionsMatch else {
-      throw PhotoLibraryError.verificationFailed("像素尺寸不一致")
+      throw PhotoLibraryError.verificationFailed(L10n("像素尺寸不一致"))
     }
     if source.kind == .video,
       abs(created.duration - source.duration) > max(0.15, source.duration * 0.001)
     {
-      throw PhotoLibraryError.verificationFailed("视频时长不一致")
+      throw PhotoLibraryError.verificationFailed(L10n("视频时长不一致"))
     }
     if let sourceDate = source.creationDate, let createdDate = created.creationDate,
       abs(createdDate.timeIntervalSince(sourceDate)) > 1
     {
-      throw PhotoLibraryError.verificationFailed("拍摄日期不一致")
+      throw PhotoLibraryError.verificationFailed(L10n("拍摄日期不一致"))
     }
     guard created.isFavorite == source.isFavorite, created.isHidden == source.isHidden else {
-      throw PhotoLibraryError.verificationFailed("收藏或隐藏状态不一致")
+      throw PhotoLibraryError.verificationFailed(L10n("收藏或隐藏状态不一致"))
     }
     if let latitude = source.locationLatitude, let longitude = source.locationLongitude {
       guard let location = created.location,
         abs(location.coordinate.latitude - latitude) < 0.000_001,
         abs(location.coordinate.longitude - longitude) < 0.000_001
       else {
-        throw PhotoLibraryError.verificationFailed("位置信息不一致")
+        throw PhotoLibraryError.verificationFailed(L10n("位置信息不一致"))
       }
       if let altitude = source.locationAltitude, abs(location.altitude - altitude) > 1 {
-        throw PhotoLibraryError.verificationFailed("位置高度不一致")
+        throw PhotoLibraryError.verificationFailed(L10n("位置高度不一致"))
       }
     }
     if !source.albumIdentifiers.isEmpty {
@@ -1071,12 +1110,12 @@ final class PhotoLibraryService: @unchecked Sendable {
       }
       let missing = Set(source.albumIdentifiers).subtracting(createdAlbumIdentifiers)
       guard missing.isEmpty else {
-        throw PhotoLibraryError.verificationFailed("普通相簿关系未完整复制")
+        throw PhotoLibraryError.verificationFailed(L10n("普通相簿关系未完整复制"))
       }
     }
 
     let bytes = Int64((try expectedFileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
-    guard bytes > 0 else { throw PhotoLibraryError.verificationFailed("输出文件为空") }
+    guard bytes > 0 else { throw PhotoLibraryError.verificationFailed(L10n("输出文件为空")) }
     return ImportedAssetVerification(identifier: identifier, bytes: bytes)
   }
 
@@ -1170,7 +1209,7 @@ final class PhotoLibraryService: @unchecked Sendable {
         if success {
           continuation.resume(returning: ())
         } else {
-          continuation.resume(throwing: error ?? PhotoLibraryError.photoKit("照片图库操作失败。"))
+          continuation.resume(throwing: error ?? PhotoLibraryError.photoKit(L10n("照片图库操作失败。")))
         }
       }
     }

@@ -1,3 +1,6 @@
+#if SWIFT_PACKAGE
+import PhotoSlimMediaCore
+#endif
 import SwiftUI
 
 struct LibraryBrowserView: View {
@@ -34,7 +37,7 @@ struct LibraryBrowserView: View {
               ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle"
           )
         }
-        .help(activeFilterCount > 0 ? "筛选（已启用 \(activeFilterCount) 项）" : "筛选")
+        .help(activeFilterCount > 0 ? L10n("筛选（已启用 \(activeFilterCount) 项）") : L10n("筛选"))
         .popover(isPresented: $showsFilters, arrowEdge: .bottom) {
           FilterPopoverView()
             .environmentObject(model)
@@ -56,22 +59,22 @@ struct LibraryBrowserView: View {
         } label: {
           Image(systemName: "arrow.up.arrow.down")
         }
-        .help("排序：\(model.filter.sortOption.title)")
+        .help(L10n("排序：\(model.filter.sortOption.title)"))
 
-        Picker("视图", selection: $model.filter.layoutMode) {
+        Picker(L10n("视图"), selection: $model.filter.layoutMode) {
           Image(systemName: "square.grid.2x2").tag(BrowserLayoutMode.grid)
           Image(systemName: "list.bullet").tag(BrowserLayoutMode.list)
         }
         .pickerStyle(.segmented)
         .labelsHidden()
         .frame(width: 72)
-        .help("切换列表或网格")
+        .help(L10n("切换列表或网格"))
 
         Button {
           model.selectAllVisible()
         } label: {
           Label(
-            model.allVisibleItemsSelected ? "取消全选" : "全选",
+            model.allVisibleItemsSelected ? L10n("取消全选") : L10n("全选"),
             systemImage: model.allVisibleItemsSelected ? "checkmark.circle" : "checkmark.circle"
           )
         }
@@ -82,11 +85,11 @@ struct LibraryBrowserView: View {
         } label: {
           Image(systemName: "arrow.clockwise")
         }
-        .help("扫描图库变更")
+        .help(L10n("扫描图库变更"))
         .disabled(model.isScanning || model.isLoadingLibraryIndex)
       }
     }
-    .searchable(text: $model.filter.searchText, placement: .toolbar, prompt: "搜索文件名")
+    .searchable(text: $model.filter.searchText, placement: .toolbar, prompt: L10n("搜索文件名"))
     .onChange(of: model.filter.layoutMode) { model.savePreferences() }
     .onDisappear { model.savePreferences() }
     .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -114,9 +117,9 @@ struct LibraryBrowserView: View {
       Image(systemName: model.isScanning ? "photo.stack" : "line.3.horizontal.decrease.circle")
         .font(.system(size: 34, weight: .light))
         .foregroundStyle(.secondary)
-      Text(model.isScanning ? "正在扫描图库" : "当前筛选下没有项目")
+      Text(model.isScanning ? L10n("正在扫描图库") : L10n("当前筛选下没有项目"))
         .font(.system(size: 16, weight: .semibold))
-      Text(model.isScanning ? "请稍候。" : "可以调整筛选条件后再试。")
+      Text(model.isScanning ? L10n("请稍候。") : L10n("可以调整筛选条件后再试。"))
         .font(.system(size: 12))
         .foregroundStyle(.secondary)
     }
@@ -127,9 +130,9 @@ struct LibraryBrowserView: View {
     VStack(spacing: 13) {
       ProgressView()
         .controlSize(.small)
-      Text("正在恢复已扫描的图库")
+      Text(L10n("正在恢复已扫描的图库"))
         .font(.system(size: 16, weight: .semibold))
-      Text("已有数据会在恢复完成后显示，随后只检查图库变更。")
+      Text(L10n("已有数据会在恢复完成后显示，随后只检查图库变更。"))
         .font(.system(size: 12))
         .foregroundStyle(.secondary)
     }
@@ -146,14 +149,14 @@ private struct ScanProgressStrip: View {
         .progressViewStyle(.linear)
         .frame(maxWidth: 210)
         .tint(PhotoSlimTheme.signal)
-      Text(model.scanTotal > 0 ? "正在扫描 \(model.scanCompleted)/\(model.scanTotal)" : "正在扫描图库")
+      Text(model.scanTotal > 0 ? L10n("正在扫描 \(model.scanCompleted)/\(model.scanTotal)") : L10n("正在扫描图库"))
         .font(.system(size: 11, weight: .medium))
       Text(model.scanFilename)
         .font(.system(size: 11))
         .foregroundStyle(.secondary)
         .lineLimit(1)
       Spacer()
-      Button("停止") { model.cancelScan() }
+      Button(L10n("停止")) { model.cancelScan() }
         .font(.system(size: 11))
     }
     .padding(.horizontal, 20)
@@ -171,7 +174,7 @@ private struct SelectionBar: View {
       VStack(alignment: .leading, spacing: 3) {
         Text(
           model.selectedIdentifiers.isEmpty
-            ? "选择要压缩的项目" : "已选择 \(model.selectedIdentifiers.count) 个项目"
+            ? L10n("选择要压缩的项目") : L10n("已选择 \(model.selectedIdentifiers.count) 个项目")
         )
         .font(.system(size: 13, weight: .semibold))
         Text(storageSummary)
@@ -183,10 +186,10 @@ private struct SelectionBar: View {
 
       VStack(alignment: .trailing, spacing: 3) {
         HStack(spacing: 7) {
-          Text("推荐参数")
+          Text(L10n("推荐参数"))
             .font(.system(size: 10, weight: .semibold))
             .foregroundStyle(PhotoSlimTheme.signal)
-          Button("编辑") { showsSettings = true }
+          Button(L10n("编辑")) { showsSettings = true }
             .buttonStyle(.link)
             .font(.system(size: 11))
         }
@@ -196,9 +199,9 @@ private struct SelectionBar: View {
       }
 
       if !model.selectedIdentifiers.isEmpty {
-        Button("清除") { model.clearSelection() }
+        Button(L10n("清除")) { model.clearSelection() }
       }
-      Button(model.currentSession?.phase.blocksNewTask == true ? "加入准备队列" : "开始压缩") {
+      Button(model.currentSession?.phase.blocksNewTask == true ? L10n("加入准备队列") : L10n("开始压缩")) {
         model.beginSelectedTask()
       }
       .buttonStyle(SignalButtonStyle())
@@ -212,9 +215,9 @@ private struct SelectionBar: View {
 
   private var storageSummary: String {
     if let storage = model.localStorageReport {
-      return "\(MediaFormatting.bytes(storage.availableBytes)) 可用 · 共 \(MediaFormatting.bytes(storage.totalBytes))"
+      return L10n("\(MediaFormatting.bytes(storage.availableBytes)) 可用 · 共 \(MediaFormatting.bytes(storage.totalBytes))")
     }
-    return model.storageStatusError == nil ? "正在读取存储空间" : "存储空间暂不可用"
+    return model.storageStatusError == nil ? L10n("正在读取存储空间") : L10n("存储空间暂不可用")
   }
 }
 
@@ -287,13 +290,13 @@ private struct AssetCard: View {
             if asset.isPinned {
               Image(systemName: "pin.fill")
                 .foregroundStyle(PhotoSlimTheme.signal)
-                .help("已置顶")
+                .help(L10n("已置顶"))
             }
             Text(asset.format.title)
               .font(.system(size: 9, weight: .bold))
               .foregroundStyle(.secondary)
             if asset.isPlainHVC1 {
-              Text("再次压缩")
+              Text(L10n("再次压缩"))
                 .font(.system(size: 8, weight: .semibold))
                 .foregroundStyle(PhotoSlimTheme.warning)
             }
@@ -324,18 +327,18 @@ private struct AssetCard: View {
       Button {
         model.togglePinned(asset)
       } label: {
-        Label(asset.isPinned ? "取消置顶" : "置顶", systemImage: asset.isPinned ? "pin.slash" : "pin")
+        Label(asset.isPinned ? L10n("取消置顶") : L10n("置顶"), systemImage: asset.isPinned ? "pin.slash" : "pin")
       }
       Button {
         action()
       } label: {
-        Label(selected ? "取消选择" : "选择", systemImage: selected ? "checkmark.circle" : "circle")
+        Label(selected ? L10n("取消选择") : L10n("选择"), systemImage: selected ? "checkmark.circle" : "circle")
       }
     }
     .accessibilityLabel(
       accessibilityLabelText
     )
-    .accessibilityValue(selected ? "已选择" : (asset.canProcess ? "未选择" : "不可处理"))
+    .accessibilityValue(selected ? L10n("已选择") : (asset.canProcess ? L10n("未选择") : L10n("不可处理")))
   }
 
   private var accessibilityLabelText: String {
@@ -367,10 +370,10 @@ private struct AssetListView: View {
           }
         } header: {
           HStack(spacing: 12) {
-            Text("项目").frame(maxWidth: .infinity, alignment: .leading)
-            Text("格式").frame(width: 70, alignment: .leading)
-            Text("拍摄日期").frame(width: 100, alignment: .leading)
-            Text("文件大小").frame(width: 90, alignment: .trailing)
+            Text(L10n("项目")).frame(maxWidth: .infinity, alignment: .leading)
+            Text(L10n("格式")).frame(width: 70, alignment: .leading)
+            Text(L10n("拍摄日期")).frame(width: 100, alignment: .leading)
+            Text(L10n("文件大小")).frame(width: 90, alignment: .trailing)
           }
           .font(.system(size: 10, weight: .semibold))
           .foregroundStyle(.secondary)
@@ -404,13 +407,13 @@ private struct AssetListRow: View {
             if asset.isPinned {
               Image(systemName: "pin.fill")
                 .foregroundStyle(PhotoSlimTheme.signal)
-                .help("已置顶")
+                .help(L10n("已置顶"))
             }
           }
           Text(
             asset.dimensionsLabel
               + (asset.kind == .video ? " · " + MediaFormatting.duration(asset.duration) : "")
-            + (asset.isPlainHVC1 ? " · 再次压缩" : "")
+            + (asset.isPlainHVC1 ? L10n(" · 再次压缩") : "")
           )
           .font(.system(size: 10)).foregroundStyle(.secondary)
         }
@@ -432,12 +435,12 @@ private struct AssetListRow: View {
       Button {
         model.togglePinned(asset)
       } label: {
-        Label(asset.isPinned ? "取消置顶" : "置顶", systemImage: asset.isPinned ? "pin.slash" : "pin")
+        Label(asset.isPinned ? L10n("取消置顶") : L10n("置顶"), systemImage: asset.isPinned ? "pin.slash" : "pin")
       }
       Button {
         action()
       } label: {
-        Label(selected ? "取消选择" : "选择", systemImage: selected ? "checkmark.circle" : "circle")
+        Label(selected ? L10n("取消选择") : L10n("选择"), systemImage: selected ? "checkmark.circle" : "circle")
       }
     }
   }

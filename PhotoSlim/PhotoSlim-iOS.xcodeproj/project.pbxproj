@@ -7,6 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		211111111111111111111147 /* AdaptiveMediaLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 311111111111111111111147; };
+		211111111111111111111148 /* PhotoSlimiOSZoomableImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 311111111111111111111148; };
+		211111111111111111111140 /* PhotoSlimLocalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 311111111111111111111140 /* PhotoSlimLocalization.swift */; };
+		211111111111111111111141 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 311111111111111111111141 /* Localizable.strings */; };
+		211111111111111111111142 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 311111111111111111111142 /* InfoPlist.strings */; };
 		211111111111111111111111 /* PhotoSlimiOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 311111111111111111111111 /* PhotoSlimiOSApp.swift */; };
 		211111111111111111111112 /* PhotoSlimiOSClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 311111111111111111111112 /* PhotoSlimiOSClient.swift */; };
 		211111111111111111111113 /* HEVCEncodingCapabilities.swift in Sources */ = {isa = PBXBuildFile; fileRef = 311111111111111111111113 /* HEVCEncodingCapabilities.swift */; };
@@ -24,15 +29,24 @@
 		211111111111111111111125 /* MediaFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 311111111111111111111126 /* MediaFormatting.swift */; };
 		211111111111111111111126 /* PhotoLibraryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 311111111111111111111127 /* PhotoLibraryService.swift */; };
 		211111111111111111111127 /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 311111111111111111111128 /* SessionStore.swift */; };
+		211111111111111111111128 /* ProcessedAssetCloudSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 311111111111111111111129 /* ProcessedAssetCloudSyncService.swift */; };
 		221111111111111111111111 /* Photos.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 321111111111111111111111 /* Photos.framework */; };
 		221111111111111111111112 /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 321111111111111111111112 /* AVFoundation.framework */; };
 		221111111111111111111113 /* AVKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 321111111111111111111113 /* AVKit.framework */; };
 		221111111111111111111114 /* ImageIO.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 321111111111111111111114 /* ImageIO.framework */; };
 		221111111111111111111115 /* VideoToolbox.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 321111111111111111111115 /* VideoToolbox.framework */; };
 		221111111111111111111116 /* CoreLocation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 321111111111111111111116 /* CoreLocation.framework */; };
+		221111111111111111111117 /* CloudKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 321111111111111111111117 /* CloudKit.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		311111111111111111111147 /* AdaptiveMediaLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdaptiveMediaLayout.swift; sourceTree = "<group>"; };
+		311111111111111111111148 /* PhotoSlimiOSZoomableImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoSlimiOSZoomableImage.swift; sourceTree = "<group>"; };
+		311111111111111111111140 /* PhotoSlimLocalization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoSlimLocalization.swift; sourceTree = "<group>"; };
+		311111111111111111111143 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = Resources/en.lproj/Localizable.strings; sourceTree = "<group>"; };
+		311111111111111111111144 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "Resources/zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
+		311111111111111111111145 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
+		311111111111111111111146 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
 		311111111111111111111111 /* PhotoSlimiOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoSlimiOSApp.swift; sourceTree = "<group>"; };
 		311111111111111111111112 /* PhotoSlimiOSClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoSlimiOSClient.swift; sourceTree = "<group>"; };
 		311111111111111111111113 /* HEVCEncodingCapabilities.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HEVCEncodingCapabilities.swift; sourceTree = "<group>"; };
@@ -51,12 +65,15 @@
 		311111111111111111111126 /* MediaFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/MediaFormatting.swift; sourceTree = "<group>"; };
 		311111111111111111111127 /* PhotoLibraryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/PhotoLibraryService.swift; sourceTree = "<group>"; };
 		311111111111111111111128 /* SessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/SessionStore.swift; sourceTree = "<group>"; };
+		311111111111111111111129 /* ProcessedAssetCloudSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/ProcessedAssetCloudSyncService.swift; sourceTree = "<group>"; };
+		311111111111111111111130 /* PhotoSlim-iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "PhotoSlim-iOS.entitlements"; sourceTree = "<group>"; };
 		321111111111111111111111 /* Photos.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Photos.framework; path = System/Library/Frameworks/Photos.framework; sourceTree = SDKROOT; };
 		321111111111111111111112 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
 		321111111111111111111113 /* AVKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVKit.framework; path = System/Library/Frameworks/AVKit.framework; sourceTree = SDKROOT; };
 		321111111111111111111114 /* ImageIO.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ImageIO.framework; path = System/Library/Frameworks/ImageIO.framework; sourceTree = SDKROOT; };
 		321111111111111111111115 /* VideoToolbox.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = VideoToolbox.framework; path = System/Library/Frameworks/VideoToolbox.framework; sourceTree = SDKROOT; };
 		321111111111111111111116 /* CoreLocation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreLocation.framework; path = System/Library/Frameworks/CoreLocation.framework; sourceTree = SDKROOT; };
+		321111111111111111111117 /* CloudKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CloudKit.framework; path = System/Library/Frameworks/CloudKit.framework; sourceTree = SDKROOT; };
 		331111111111111111111111 /* PhotoSlimiOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PhotoSlimiOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -71,6 +88,7 @@
 				221111111111111111111114 /* ImageIO.framework in Frameworks */,
 				221111111111111111111115 /* VideoToolbox.framework in Frameworks */,
 				221111111111111111111116 /* CoreLocation.framework in Frameworks */,
+				221111111111111111111117 /* CloudKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -105,6 +123,7 @@
 				311111111111111111111116 /* PhotoSlimiOSUnifiedRoot.swift */,
 				311111111111111111111117 /* PhotoSlimiOSLibraryViews.swift */,
 				311111111111111111111118 /* PhotoSlimiOSWorkspaceViews.swift */,
+				311111111111111111111148 /* PhotoSlimiOSZoomableImage.swift */,
 			);
 			path = Sources/PhotoSlimiOSClient;
 			sourceTree = "<group>";
@@ -114,6 +133,9 @@
 			children = (
 				311111111111111111111113 /* HEVCEncodingCapabilities.swift */,
 				311111111111111111111114 /* SharedMediaCompressor.swift */,
+				311111111111111111111140 /* PhotoSlimLocalization.swift */,
+				311111111111111111111147 /* AdaptiveMediaLayout.swift */,
+				311111111111111111111141 /* Localizable.strings */,
 			);
 			path = Sources/PhotoSlimMediaCore;
 			sourceTree = "<group>";
@@ -131,6 +153,7 @@
 				311111111111111111111126 /* MediaFormatting.swift */,
 				311111111111111111111127 /* PhotoLibraryService.swift */,
 				311111111111111111111128 /* SessionStore.swift */,
+				311111111111111111111129 /* ProcessedAssetCloudSyncService.swift */,
 			);
 			name = SharedApplication;
 			path = Sources/PhotoSlim;
@@ -140,6 +163,8 @@
 			isa = PBXGroup;
 			children = (
 				311111111111111111111115 /* PhotoSlim-iOS-Info.plist */,
+				311111111111111111111130 /* PhotoSlim-iOS.entitlements */,
+				311111111111111111111142 /* InfoPlist.strings */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -153,6 +178,7 @@
 				321111111111111111111114 /* ImageIO.framework */,
 				321111111111111111111115 /* VideoToolbox.framework */,
 				321111111111111111111116 /* CoreLocation.framework */,
+				321111111111111111111117 /* CloudKit.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -205,7 +231,7 @@
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
-				zh_CN,
+				"zh-Hans",
 				Base,
 			);
 			mainGroup = 411111111111111111111111;
@@ -223,10 +249,27 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				211111111111111111111141 /* Localizable.strings in Resources */,
+				211111111111111111111142 /* InfoPlist.strings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXVariantGroup section */
+		311111111111111111111141 /* Localizable.strings */ = {
+			isa = PBXVariantGroup;
+			children = (311111111111111111111143, 311111111111111111111144);
+			name = Localizable.strings;
+			sourceTree = "<group>";
+		};
+		311111111111111111111142 /* InfoPlist.strings */ = {
+			isa = PBXVariantGroup;
+			children = (311111111111111111111145, 311111111111111111111146);
+			name = InfoPlist.strings;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
 
 /* Begin PBXSourcesBuildPhase section */
 		511111111111111111111112 /* Sources */ = {
@@ -247,8 +290,12 @@
 				211111111111111111111125 /* MediaFormatting.swift in Sources */,
 				211111111111111111111126 /* PhotoLibraryService.swift in Sources */,
 				211111111111111111111127 /* SessionStore.swift in Sources */,
+				211111111111111111111128 /* ProcessedAssetCloudSyncService.swift in Sources */,
 				211111111111111111111113 /* HEVCEncodingCapabilities.swift in Sources */,
 				211111111111111111111114 /* SharedMediaCompressor.swift in Sources */,
+				211111111111111111111140 /* PhotoSlimLocalization.swift in Sources */,
+				211111111111111111111147 /* AdaptiveMediaLayout.swift in Sources */,
+				211111111111111111111148 /* PhotoSlimiOSZoomableImage.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -261,9 +308,6 @@
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
-				CODE_SIGN_IDENTITY = "-";
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.0;
@@ -276,9 +320,6 @@
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
-				CODE_SIGN_IDENTITY = "-";
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				SDKROOT = iphoneos;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
@@ -291,9 +332,8 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = "";
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_IDENTITY = "-";
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = YES;
+				CODE_SIGN_ENTITLEMENTS = "Resources/PhotoSlim-iOS.entitlements";
+				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Resources/PhotoSlim-iOS-Info.plist;
@@ -302,6 +342,8 @@
 				PRODUCT_BUNDLE_IDENTIFIER = local.codex.PhotoSlim.iOS;
 				PRODUCT_NAME = PhotoSlim;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG PHOTOSLIM_UNIFIED_APP";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphone*27.1*]" = "DEBUG PHOTOSLIM_UNIFIED_APP PHOTOSLIM_DUO_SDK";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphone*27.2*]" = "DEBUG PHOTOSLIM_UNIFIED_APP PHOTOSLIM_DUO_SDK";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -312,9 +354,8 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = "";
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_IDENTITY = "-";
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = YES;
+				CODE_SIGN_ENTITLEMENTS = "Resources/PhotoSlim-iOS.entitlements";
+				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Resources/PhotoSlim-iOS-Info.plist;
@@ -324,6 +365,8 @@
 				PRODUCT_NAME = PhotoSlim;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = PHOTOSLIM_UNIFIED_APP;
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphone*27.1*]" = "PHOTOSLIM_UNIFIED_APP PHOTOSLIM_DUO_SDK";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphone*27.2*]" = "PHOTOSLIM_UNIFIED_APP PHOTOSLIM_DUO_SDK";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};

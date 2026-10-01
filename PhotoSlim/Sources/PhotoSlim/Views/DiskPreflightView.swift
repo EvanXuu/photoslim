@@ -1,3 +1,6 @@
+#if SWIFT_PACKAGE
+import PhotoSlimMediaCore
+#endif
 import SwiftUI
 
 struct DiskPreflightView: View {
@@ -16,11 +19,11 @@ struct DiskPreflightView: View {
         VStack(alignment: .leading, spacing: 4) {
           Text(
             report.hasEnoughSpace
-              ? (report.hasUnknownCloudSizes ? "空间检查通过" : "可以开始")
-              : "可用空间不足"
+              ? (report.hasUnknownCloudSizes ? L10n("空间检查通过") : L10n("可以开始"))
+              : L10n("可用空间不足")
           )
             .font(.system(size: 19, weight: .semibold))
-          Text("\(model.pendingTask?.assets.count ?? 0) 个项目 · 开始前会再次核对")
+          Text(L10n("\(model.pendingTask?.assets.count ?? 0) 个项目 · 开始前会再次核对"))
             .font(.system(size: 11))
             .foregroundStyle(.secondary)
         }
@@ -30,21 +33,21 @@ struct DiskPreflightView: View {
       Divider()
 
       VStack(spacing: 0) {
-        spaceRow("本机文件", report.knownLocalInputBytes, secondary: true)
+        spaceRow(L10n("本机文件"), report.knownLocalInputBytes, secondary: true)
         if report.knownCloudDownloadBytes > 0 {
-          spaceRow("云端文件", report.knownCloudDownloadBytes, secondary: true)
+          spaceRow(L10n("云端文件"), report.knownCloudDownloadBytes, secondary: true)
         }
-        spaceRow("处理所需空间", report.knownLocalInputBytes + report.knownCloudDownloadBytes, secondary: false)
-        spaceRow("安全余量", report.safetyMarginBytes, secondary: false)
+        spaceRow(L10n("处理所需空间"), report.knownLocalInputBytes + report.knownCloudDownloadBytes, secondary: false)
+        spaceRow(L10n("安全余量"), report.safetyMarginBytes, secondary: false)
         Divider().padding(.vertical, 8)
-        spaceRow("任务需要", report.requiredBytes, emphasized: true)
-        spaceRow("当前可用", report.availableBytes, emphasized: true)
+        spaceRow(L10n("任务需要"), report.requiredBytes, emphasized: true)
+        spaceRow(L10n("当前可用"), report.availableBytes, emphasized: true)
       }
       .padding(20)
 
       if report.hasUnknownCloudSizes {
         Label(
-          "\(report.unknownCloudAssetCount) 个云端项目的大小暂时未知。开始后会逐项下载并检查空间；空间不足时会停止，原件不会被修改。",
+          L10n("\(report.unknownCloudAssetCount) 个云端项目的大小暂时未知。开始后会逐项下载并检查空间；空间不足时会停止，原件不会被修改。"),
           systemImage: "icloud.and.arrow.down"
         )
         .font(.system(size: 11))
@@ -59,13 +62,13 @@ struct DiskPreflightView: View {
       Spacer(minLength: 12)
       Divider()
       HStack {
-        Button("取消") {
+        Button(L10n("取消")) {
           model.cancelPreparedTask()
           dismiss()
         }
         .keyboardShortcut(.cancelAction)
         Spacer()
-        Button(model.currentSession?.phase.blocksNewTask == true ? "加入准备队列" : "开始压缩") {
+        Button(model.currentSession?.phase.blocksNewTask == true ? L10n("加入准备队列") : L10n("开始压缩")) {
           model.confirmPreparedTask()
           if report.hasEnoughSpace { dismiss() }
         }

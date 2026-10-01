@@ -1,3 +1,6 @@
+#if SWIFT_PACKAGE
+import PhotoSlimMediaCore
+#endif
 import Foundation
 
 struct PersistedApplicationState: Codable, Sendable {
@@ -35,7 +38,7 @@ actor SessionStore {
     var errorDescription: String? {
       switch self {
       case .cannotCreateDirectory(let url):
-        return "无法创建会话目录：\(url.path)"
+        return L10n("无法创建会话目录：\(url.path)")
       }
     }
   }

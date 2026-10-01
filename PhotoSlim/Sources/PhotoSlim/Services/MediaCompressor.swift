@@ -23,40 +23,43 @@ enum CompressionError: LocalizedError {
   case hdrVideoUnsupported
   case hardwareHEVCUnavailable
   case exportSession(String)
+  case alreadyProcessed
 
   var isAudioAppendFailure: Bool {
     guard case .writerAppend(let track, _) = self else { return false }
-    return track == "音频"
+    return track == "audio"
   }
 
   var errorDescription: String? {
     switch self {
-    case .invalidImage: return "无法读取这张照片。"
-    case .cannotCreateDestination: return "无法创建压缩结果。"
-    case .imageEncodingFailed: return "照片压缩失败。"
-    case .missingVideoTrack: return "无法读取视频内容。"
-    case .reader: return "视频压缩失败，请稍后重试。"
-    case .writer: return "视频压缩失败，请稍后重试。"
-    case .writerAppend: return "视频压缩失败，请稍后重试。"
-    case .outputVerification: return "压缩结果检查未通过，原件未修改。"
+    case .invalidImage: return L10n("无法读取这张照片。")
+    case .cannotCreateDestination: return L10n("无法创建压缩结果。")
+    case .imageEncodingFailed: return L10n("照片压缩失败。")
+    case .missingVideoTrack: return L10n("无法读取视频内容。")
+    case .reader: return L10n("视频压缩失败，请稍后重试。")
+    case .writer: return L10n("视频压缩失败，请稍后重试。")
+    case .writerAppend: return L10n("视频压缩失败，请稍后重试。")
+    case .outputVerification: return L10n("压缩结果检查未通过，原件未修改。")
     case .insufficientSavings(let actual, let required):
       if actual < 0 {
-        return "结果比原件更大，未写入相册。"
+        return L10n("结果比原件更大，未写入相册。")
       }
-      return "实际只节省 \(Int(actual * 100))%，低于设置的 \(Int(required * 100))%。"
+      return L10n("实际只节省 \(Int(actual * 100))%，低于设置的 \(Int(required * 100))%。")
     case .insufficientDiskSpace(let required, let available):
       let shortfall = max(0, required - available)
-      return "空间不足，还需要 \(MediaFormatting.bytes(shortfall)) 可用空间。原件未修改。"
+      return L10n("空间不足，还需要 \(MediaFormatting.bytes(shortfall)) 可用空间。原件未修改。")
     case .originalSizeUnavailable:
-      return "无法确认原件大小，已安全跳过。"
+      return L10n("无法确认原件大小，已安全跳过。")
     case .unsupportedVideoCodec:
-      return "暂不支持这种视频格式，已安全跳过。"
+      return L10n("暂不支持这种视频格式，已安全跳过。")
     case .hdrVideoUnsupported:
-      return "暂不支持包含 HDR 信息的视频，已安全跳过。"
+      return L10n("暂不支持包含 HDR 信息的视频，已安全跳过。")
     case .hardwareHEVCUnavailable:
-      return "当前设备暂时无法压缩此视频，原件未修改。"
+      return L10n("当前设备暂时无法压缩此视频，原件未修改。")
     case .exportSession:
-      return "视频压缩失败，请稍后重试。"
+      return L10n("视频压缩失败，请稍后重试。")
+    case .alreadyProcessed:
+      return L10n("已经由 PhotoSlim 处理")
     }
   }
 }
@@ -210,7 +213,7 @@ final class VideoCompressor: @unchecked Sendable {
         )
       } catch {
         throw CompressionError.writer(
-          "原音频直通失败（\(firstError.localizedDescription)）；改用 AAC 后仍失败：\(error.localizedDescription)"
+          L10n("原音频直通失败（\(firstError.localizedDescription)）；改用 AAC 后仍失败：\(error.localizedDescription)")
         )
       }
     }
@@ -330,13 +333,13 @@ final class VideoCompressor: @unchecked Sendable {
     videoInput.expectsMediaDataInRealTime = false
     videoInput.transform = preferredTransform
     guard reader.canAdd(videoOutput), writer.canAdd(videoInput) else {
-      throw CompressionError.writer("当前视频轨道不支持 HEVC 转换。")
+      throw CompressionError.writer(L10n("当前视频轨道不支持 HEVC 转换。"))
     }
     reader.add(videoOutput)
     writer.add(videoInput)
 
     var pipes = [
-      TrackPipe(label: "视频", output: videoOutput, input: videoInput, reportsProgress: true)
+      TrackPipe(label: "video", output: videoOutput, input: videoInput, reportsProgress: true)
     ]
     for audioTrack in audioTracks {
       let formatHint = try await audioTrack.load(.formatDescriptions).first
@@ -356,7 +359,7 @@ final class VideoCompressor: @unchecked Sendable {
           writer.add(passthroughInput)
           pipes.append(
             TrackPipe(
-              label: "音频",
+              label: "audio",
               output: passthroughOutput,
               input: passthroughInput,
               reportsProgress: false
@@ -383,12 +386,12 @@ final class VideoCompressor: @unchecked Sendable {
           ])
         aacInput.expectsMediaDataInRealTime = false
         guard reader.canAdd(pcmOutput), writer.canAdd(aacInput) else {
-          throw CompressionError.writer("无法保留或转换音频轨道。")
+          throw CompressionError.writer(L10n("无法保留或转换音频轨道。"))
         }
         reader.add(pcmOutput)
         writer.add(aacInput)
         pipes.append(
-          TrackPipe(label: "音频", output: pcmOutput, input: aacInput, reportsProgress: false)
+          TrackPipe(label: "audio", output: pcmOutput, input: aacInput, reportsProgress: false)
         )
       }
     }
@@ -399,10 +402,10 @@ final class VideoCompressor: @unchecked Sendable {
     // Skipping this optional track avoids rejecting an otherwise valid video.
 
     guard writer.startWriting() else {
-      throw CompressionError.writer(writer.error?.localizedDescription ?? "无法开始写入")
+      throw CompressionError.writer(writer.error?.localizedDescription ?? L10n("无法开始写入"))
     }
     guard reader.startReading() else {
-      throw CompressionError.reader(reader.error?.localizedDescription ?? "无法开始读取")
+      throw CompressionError.reader(reader.error?.localizedDescription ?? L10n("无法开始读取"))
     }
     writer.startSession(atSourceTime: sessionStart)
     progress(0)
@@ -424,7 +427,7 @@ final class VideoCompressor: @unchecked Sendable {
       }
     } catch let error as CompressionError {
       reader.cancelReading()
-      let detail = writer.error?.localizedDescription ?? "写入器拒绝了当前样本"
+      let detail = writer.error?.localizedDescription ?? L10n("写入器拒绝了当前样本")
       writer.cancelWriting()
       if case .writerAppend(let track, _) = error {
         throw CompressionError.writerAppend(track: track, detail: detail)
@@ -439,13 +442,13 @@ final class VideoCompressor: @unchecked Sendable {
     try Task.checkCancellation()
     if reader.status == .failed {
       writer.cancelWriting()
-      throw CompressionError.reader(reader.error?.localizedDescription ?? "未知错误")
+      throw CompressionError.reader(reader.error?.localizedDescription ?? L10n("未知错误"))
     }
     await withCheckedContinuation { continuation in
       writer.finishWriting { continuation.resume() }
     }
     guard writer.status == .completed else {
-      throw CompressionError.writer(writer.error?.localizedDescription ?? "输出未完成")
+      throw CompressionError.writer(writer.error?.localizedDescription ?? L10n("输出未完成"))
     }
     progress(1)
   }
@@ -489,7 +492,7 @@ final class VideoCompressor: @unchecked Sendable {
                 .failure(
                   CompressionError.writerAppend(
                     track: pipe.label,
-                    detail: "写入器拒绝了当前样本"
+                    detail: L10n("写入器拒绝了当前样本")
                   )
                 )
               )
@@ -642,7 +645,7 @@ struct MediaCompressionEngine: Sendable {
     }
 
     let bytes = Int64((try outputURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
-    guard bytes > 0 else { throw CompressionError.outputVerification("输出文件为空") }
+    guard bytes > 0 else { throw CompressionError.outputVerification(L10n("输出文件为空")) }
     if measuredInputBytes > 0 {
       let savings = Double(measuredInputBytes - bytes) / Double(measuredInputBytes)
       guard savings >= settings.minimumSavingsRatio else {
@@ -739,7 +742,7 @@ struct MediaCompressionEngine: Sendable {
       width == source.pixelWidth,
       height == source.pixelHeight
     else {
-      throw CompressionError.outputVerification("HEIC 编码或像素尺寸不正确")
+      throw CompressionError.outputVerification(L10n("HEIC 编码或像素尺寸不正确"))
     }
   }
 
@@ -748,10 +751,10 @@ struct MediaCompressionEngine: Sendable {
     guard let track = try await asset.loadTracks(withMediaType: .video).first,
       let description = try await track.load(.formatDescriptions).first
     else {
-      throw CompressionError.outputVerification("缺少视频轨道")
+      throw CompressionError.outputVerification(L10n("缺少视频轨道"))
     }
     guard VideoCodecClassifier.isHEVC(CMFormatDescriptionGetMediaSubType(description)) else {
-      throw CompressionError.outputVerification("输出不是 HEVC")
+      throw CompressionError.outputVerification(L10n("输出不是 HEVC"))
     }
     let naturalSize = try await track.load(.naturalSize)
     let preferredTransform = try await track.load(.preferredTransform)
@@ -775,12 +778,12 @@ struct MediaCompressionEngine: Sendable {
     )
     guard rawMatches || displayMatches else {
       throw CompressionError.outputVerification(
-        "视频尺寸不一致（输出轨道 \(rawWidth)×\(rawHeight)，显示尺寸 \(displayWidth)×\(displayHeight)；原件 \(source.pixelWidth)×\(source.pixelHeight)）"
+        L10n("视频尺寸不一致（输出轨道 \(rawWidth)×\(rawHeight)，显示尺寸 \(displayWidth)×\(displayHeight)；原件 \(source.pixelWidth)×\(source.pixelHeight)）")
       )
     }
     let duration = CMTimeGetSeconds(try await asset.load(.duration))
     guard abs(duration - source.duration) <= max(0.15, source.duration * 0.001) else {
-      throw CompressionError.outputVerification("视频时长不一致")
+      throw CompressionError.outputVerification(L10n("视频时长不一致"))
     }
   }
 

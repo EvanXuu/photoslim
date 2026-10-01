@@ -1,3 +1,6 @@
+#if SWIFT_PACKAGE
+import PhotoSlimMediaCore
+#endif
 import AppKit
 import SwiftUI
 
@@ -16,10 +19,10 @@ struct AuthorizationView: View {
       }
 
       VStack(spacing: 9) {
-        Text("安全整理你的照片图库")
+        Text(L10n("安全整理你的照片图库"))
           .font(.system(size: 26, weight: .semibold))
           .foregroundStyle(PhotoSlimTheme.ink)
-        Text("PhotoSlim 只在本机处理照片。压缩结果检查无误后，\n原件仍会保留，直到你亲自确认。")
+        Text(L10n("PhotoSlim 只在本机处理照片。压缩结果检查无误后，\n原件仍会保留，直到你亲自确认。"))
           .font(.system(size: 14))
           .foregroundStyle(.secondary)
           .multilineTextAlignment(.center)
@@ -27,13 +30,13 @@ struct AuthorizationView: View {
       }
 
       if model.accessState == .notDetermined {
-        Button("允许访问照片") { model.requestAccessAndScan() }
+        Button(L10n("允许访问照片")) { model.requestAccessAndScan() }
           .buttonStyle(SignalButtonStyle())
       } else {
         VStack(spacing: 12) {
           Text(model.accessState.title)
             .font(.system(size: 13, weight: .medium))
-          Button("打开系统设置") {
+          Button(L10n("打开系统设置")) {
             if let url = URL(
               string:
                 "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Photos"
@@ -45,9 +48,9 @@ struct AuthorizationView: View {
       }
 
       HStack(spacing: 22) {
-        permissionFact("不改数据库", symbol: "checkmark.shield")
-        permissionFact("本机压缩", symbol: "desktopcomputer")
-        permissionFact("删除前审核", symbol: "eye")
+        permissionFact(L10n("不改数据库"), symbol: "checkmark.shield")
+        permissionFact(L10n("本机压缩"), symbol: "desktopcomputer")
+        permissionFact(L10n("删除前审核"), symbol: "eye")
       }
       .padding(.top, 8)
     }

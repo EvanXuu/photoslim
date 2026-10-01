@@ -2,6 +2,31 @@
 
 [简体中文](CHANGELOG.zh-CN.md)
 
+## Unreleased — 2026-10-01
+
+### New features
+
+- Use PhotoSlim in English or Simplified Chinese, with localized Photos access prompts and English fallback for other device languages.
+- Avoid repeat compression across devices with optional private iCloud processed-item records. Only confirmed, completed tasks are recorded, and media stays on your device. Developer signing and a configured CloudKit container are required.
+
+### Improvements
+
+- iPhone galleries and review grids adapt to the available width, including Duo's outer and inner displays and accessibility text sizes.
+- Pinch, pan, and double-tap photos in result details. Original/result comparison preserves the relative zoom when switching images.
+- With the iOS 27.1 SDK, Duo review positions media and comparison controls around the fold. Minimum support remains iOS 17 and macOS 14.
+- Record sync runs in the background, keeps an offline outbox, and isolates records when the iCloud account changes. Sync does not hold up task completion or library loading.
+
+### Fixes
+
+- Local-only macOS and Simulator packages no longer fail to launch because of unauthorized CloudKit entitlements.
+- Save, cancel, and other toolbar actions retain labels and icons in Duo's vertical toolbar layout.
+- Conflicting original/result relationships remain conservative across sync retries. Items newly marked as processed are checked again before download and compression.
+
+### Build notes
+
+- Packaging requires SDK 27 or newer. macOS was built with SDK 27.0; iOS and Duo builds currently use the installed 27.1 beta SDK, not the iOS 27.0 final SDK.
+- Cross-device CloudKit acceptance still requires a signed two-device test; a successful local build is not that verification.
+
 ## [0.2beta] - 2026-08-19
 
 PhotoSlim 0.2beta makes the compression flow review-first: originals remain untouched until the user has inspected and approved the generated results.

@@ -24,9 +24,9 @@ public enum PhotoSlimiOSMediaKind: String, Codable, CaseIterable, Identifiable, 
 
     public var title: String {
         switch self {
-        case .all: return "全部"
-        case .photo: return "照片"
-        case .video: return "视频"
+        case .all: return L10n("全部")
+        case .photo: return L10n("照片")
+        case .video: return L10n("视频")
         }
     }
 }
@@ -51,11 +51,11 @@ public struct PhotoSlimiOSAssetItem: Identifiable, Equatable, Sendable {
     public let originalByteCount: Int64?
 
     public var displayTitle: String {
-        filename.isEmpty ? (kind == .video ? "未命名视频" : "未命名照片") : filename
+        filename.isEmpty ? (kind == .video ? L10n("未命名视频") : L10n("未命名照片")) : filename
     }
 
     public var dimensionsLabel: String {
-        guard pixelWidth > 0, pixelHeight > 0 else { return "尺寸未知" }
+        guard pixelWidth > 0, pixelHeight > 0 else { return L10n("尺寸未知") }
         return "\(pixelWidth) × \(pixelHeight)"
     }
 
@@ -385,12 +385,12 @@ public final class PhotoSlimiOSLibraryModel: ObservableObject {
     public func startCompression() {
         guard canReadPhotos, !isScanning, !isProcessing else { return }
         guard previews.isEmpty else {
-            workflowError = "请先选择“撤回压缩副本”或“确认写入相册并删除原件”。"
+            workflowError = L10n("请先选择“撤回压缩副本”或“确认写入相册并删除原件”。")
             return
         }
         let items = selectedItems
         guard !items.isEmpty else {
-            workflowError = "请先选择要压缩的项目。"
+            workflowError = L10n("请先选择要压缩的项目。")
             return
         }
 
@@ -402,14 +402,14 @@ public final class PhotoSlimiOSLibraryModel: ObservableObject {
                 withIntermediateDirectories: true
             )
         } catch {
-            workflowError = "无法创建临时工作目录。"
+            workflowError = L10n("无法创建临时工作目录。")
             return
         }
 
         previewDirectory = directory
         isProcessing = true
-        currentItemName = "准备处理"
-        processingStatus = "正在准备"
+        currentItemName = L10n("准备处理")
+        processingStatus = L10n("正在准备")
         downloadProgress = 0
         compressionProgress = 0
         completedItemCount = 0
@@ -425,7 +425,7 @@ public final class PhotoSlimiOSLibraryModel: ObservableObject {
 
     public func cancelCompression() {
         guard isProcessing else { return }
-        processingStatus = "正在终止并清理临时文件"
+        processingStatus = L10n("正在终止并清理临时文件")
         processingTask?.cancel()
         cancelActivePhotoRequests()
     }
@@ -434,26 +434,26 @@ public final class PhotoSlimiOSLibraryModel: ObservableObject {
     public func discardPreviews() {
         guard !isProcessing else { return }
         clearPreviewFiles()
-        processingStatus = "已撤回压缩副本"
+        processingStatus = L10n("已撤回压缩副本")
     }
 
     public func commitPreviews() {
         guard !previews.isEmpty, !isProcessing else { return }
         guard canReadPhotos else {
-            workflowError = "需要照片访问权限才能写入相册。"
+            workflowError = L10n("需要照片访问权限才能写入相册。")
             return
         }
 
         let pending = previews
         isProcessing = true
-        processingStatus = "正在写入相册"
+        processingStatus = L10n("正在写入相册")
         workflowError = nil
         processingTask = Task { @MainActor [weak self] in
             guard let self else { return }
             do {
                 try await self.performPhotoChanges(for: pending)
                 self.clearPreviewFiles()
-                self.processingStatus = "已写入相册并删除原件"
+                self.processingStatus = L10n("已写入相册并删除原件")
                 self.isProcessing = false
                 self.processingTask = nil
                 self.scanLibrary()
@@ -462,7 +462,7 @@ public final class PhotoSlimiOSLibraryModel: ObservableObject {
                 self.processingTask = nil
             } catch {
                 self.workflowError = Self.userMessage(for: error)
-                self.processingStatus = "写入失败，原件未删除"
+                self.processingStatus = L10n("写入失败，原件未删除")
                 self.isProcessing = false
                 self.processingTask = nil
             }
@@ -480,7 +480,7 @@ public final class PhotoSlimiOSLibraryModel: ObservableObject {
             for item in items {
                 group.addTask { @MainActor [weak self] in
                     guard let self else {
-                        return .failure(identifier: item.id, message: "任务已结束")
+                        return .failure(identifier: item.id, message: L10n("任务已结束"))
                     }
                     return await self.process(item: item, directory: directory)
                 }
@@ -510,8 +510,8 @@ public final class PhotoSlimiOSLibraryModel: ObservableObject {
             isProcessing = false
             processingTask = nil
             processingStatus = completedPreviews.isEmpty
-                ? "没有生成可用的压缩结果"
-                : "压缩完成，请检查结果"
+                ? L10n("没有生成可用的压缩结果")
+                : L10n("压缩完成，请检查结果")
             if !failures.isEmpty {
                 workflowError = failures.prefix(2).joined(separator: "；")
             }
@@ -521,7 +521,7 @@ public final class PhotoSlimiOSLibraryModel: ObservableObject {
             previewDirectory = nil
             isProcessing = false
             processingTask = nil
-            processingStatus = "已终止，临时文件已清理"
+            processingStatus = L10n("已终止，临时文件已清理")
             downloadProgress = 0
             compressionProgress = 0
         } catch {
@@ -531,7 +531,7 @@ public final class PhotoSlimiOSLibraryModel: ObservableObject {
             isProcessing = false
             processingTask = nil
             workflowError = Self.userMessage(for: error)
-            processingStatus = "处理失败，原件未修改"
+            processingStatus = L10n("处理失败，原件未修改")
         }
     }
 
@@ -540,13 +540,13 @@ public final class PhotoSlimiOSLibraryModel: ObservableObject {
         directory: URL
     ) async -> PhotoSlimiOSProcessingResult {
         currentItemName = item.displayTitle
-        processingStatus = "正在下载原件"
+        processingStatus = L10n("正在下载原件")
         do {
             try Task.checkCancellation()
             let downloaded = try await download(item: item, directory: directory)
             try Task.checkCancellation()
             setDownloadProgress(1, for: item.id)
-            processingStatus = "正在压缩"
+            processingStatus = L10n("正在压缩")
 
             let outputURL: URL
             let output: PhotoSlimCoreCompressionOutput
@@ -592,7 +592,7 @@ public final class PhotoSlimiOSLibraryModel: ObservableObject {
                 )
             )
         } catch is CancellationError {
-            return .failure(identifier: item.id, message: "已终止")
+            return .failure(identifier: item.id, message: L10n("已终止"))
         } catch {
             return .failure(identifier: item.id, message: "\(item.displayTitle)：\(Self.userMessage(for: error))")
         }
@@ -603,7 +603,7 @@ public final class PhotoSlimiOSLibraryModel: ObservableObject {
         directory: URL
     ) async throws -> PhotoSlimiOSDownloadedResource {
         guard let asset = photoAssets[item.id] else {
-            throw PhotoSlimCoreCompressionError.outputVerification("找不到图库项目。")
+            throw PhotoSlimCoreCompressionError.outputVerification(L10n("找不到图库项目。"))
         }
         await downloadLimiter.acquire()
         do {
@@ -639,7 +639,7 @@ public final class PhotoSlimiOSLibraryModel: ObservableObject {
                     sourceByteCount: sourceByteCount
                 )
             case .all:
-                throw PhotoSlimCoreCompressionError.outputVerification("媒体类型无效。")
+                throw PhotoSlimCoreCompressionError.outputVerification(L10n("媒体类型无效。"))
             }
             await downloadLimiter.release()
             return result
@@ -868,7 +868,7 @@ public final class PhotoSlimiOSLibraryModel: ObservableObject {
                 } else {
                     continuation.resume(
                         throwing: error ?? PhotoSlimCoreCompressionError.exportFailed(
-                            "照片图库没有完成写入。"
+                            L10n("照片图库没有完成写入。")
                         )
                     )
                 }
@@ -879,13 +879,13 @@ public final class PhotoSlimiOSLibraryModel: ObservableObject {
     public var accessTitle: String {
         switch authorizationStatus {
         case .authorized, .limited:
-            return "已允许访问照片"
+            return L10n("已允许访问照片")
         case .denied, .restricted:
-            return "照片访问已关闭"
+            return L10n("照片访问已关闭")
         case .notDetermined:
-            return "尚未允许访问照片"
+            return L10n("尚未允许访问照片")
         @unknown default:
-            return "照片访问状态未知"
+            return L10n("照片访问状态未知")
         }
     }
 
@@ -936,16 +936,16 @@ private struct PhotoSlimiOSLegacyRootView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("整理照片和视频")
+            Text(L10n("整理照片和视频"))
                 .font(.largeTitle.weight(.bold))
-            Text("在设备上整理媒体，扫描时不会修改原件。")
+            Text(L10n("在设备上整理媒体，扫描时不会修改原件。"))
                 .foregroundStyle(.secondary)
         }
     }
 
     private var accessCard: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Label("照片图库", systemImage: "photo.on.rectangle")
+            Label(L10n("照片图库"), systemImage: "photo.on.rectangle")
                 .font(.headline)
             Text(libraryModel.accessTitle)
                 .foregroundStyle(.secondary)
@@ -955,7 +955,7 @@ private struct PhotoSlimiOSLegacyRootView: View {
                     libraryModel.requestPhotoAccess()
                 } label: {
                     Label(
-                        libraryModel.isRequestingAccess ? "正在请求…" : "允许访问照片",
+                        libraryModel.isRequestingAccess ? L10n("正在请求…") : L10n("允许访问照片"),
                         systemImage: "lock.open"
                     )
                 }
@@ -964,20 +964,20 @@ private struct PhotoSlimiOSLegacyRootView: View {
             } else {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("\(libraryModel.photoCount) 张照片 · \(libraryModel.videoCount) 个视频")
+                        Text(L10n("\(libraryModel.photoCount) 张照片 · \(libraryModel.videoCount) 个视频"))
                             .font(.headline)
                         if let lastScanDate = libraryModel.lastScanDate {
-                            Text("已读取图库索引 · \(lastScanDate.formatted(date: .omitted, time: .shortened))")
+                            Text(L10n("已读取图库索引 · \(lastScanDate.formatted(date: .omitted, time: .shortened))"))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         } else {
-                            Text("尚未读取图库索引")
+                            Text(L10n("尚未读取图库索引"))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                     }
                     Spacer()
-                    Button("扫描图库") {
+                    Button(L10n("扫描图库")) {
                         libraryModel.scanLibrary()
                     }
                     .buttonStyle(.bordered)
@@ -991,16 +991,16 @@ private struct PhotoSlimiOSLegacyRootView: View {
 
     private var capabilityCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("设备能力", systemImage: "cpu")
+            Label(L10n("设备能力"), systemImage: "cpu")
                 .font(.headline)
             HStack {
-                Text("HEVC 硬件编码")
+                Text(L10n("HEVC 硬件编码"))
                 Spacer()
-                Text(PhotoSlimMediaCore.supportsHardwareHEVCEncoding ? "可用" : "不可用")
+                Text(PhotoSlimMediaCore.supportsHardwareHEVCEncoding ? L10n("可用") : L10n("不可用"))
                     .foregroundStyle(PhotoSlimMediaCore.supportsHardwareHEVCEncoding ? .green : .orange)
             }
             HStack {
-                Text("最低系统")
+                Text(L10n("最低系统"))
                 Spacer()
                 Text("iOS \(PhotoSlimMediaCore.minimumSupportedIOSVersion)")
                     .foregroundStyle(.secondary)
@@ -1014,19 +1014,19 @@ private struct PhotoSlimiOSLegacyRootView: View {
     private var libraryBrowser: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Label("选择要压缩的项目", systemImage: "checklist")
+                Label(L10n("选择要压缩的项目"), systemImage: "checklist")
                     .font(.headline)
                 Spacer()
-                Button(libraryModel.allVisibleItemsSelected ? "取消全选" : "全选") {
+                Button(libraryModel.allVisibleItemsSelected ? L10n("取消全选") : L10n("全选")) {
                     libraryModel.selectAllVisible()
                 }
                 .buttonStyle(.bordered)
             }
 
-            TextField("搜索文件名", text: $libraryModel.searchText)
+            TextField(L10n("搜索文件名"), text: $libraryModel.searchText)
                 .textFieldStyle(.roundedBorder)
 
-            Picker("媒体类型", selection: $libraryModel.mediaFilter) {
+            Picker(L10n("媒体类型"), selection: $libraryModel.mediaFilter) {
                 ForEach(PhotoSlimiOSMediaKind.allCases) { kind in
                     Text(kind.title).tag(kind)
                 }
@@ -1034,7 +1034,7 @@ private struct PhotoSlimiOSLegacyRootView: View {
             .pickerStyle(.segmented)
 
             if let availableStorageLabel = libraryModel.availableStorageLabel {
-                Text("本机可用空间 \(availableStorageLabel)")
+                Text(L10n("本机可用空间 \(availableStorageLabel)"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -1042,7 +1042,7 @@ private struct PhotoSlimiOSLegacyRootView: View {
             if libraryModel.isScanning {
                 ProgressView(value: libraryModel.scanProgress)
             } else if libraryModel.filteredItems.isEmpty {
-                Text("当前没有符合条件的项目")
+                Text(L10n("当前没有符合条件的项目"))
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 12)
@@ -1063,10 +1063,10 @@ private struct PhotoSlimiOSLegacyRootView: View {
             }
 
             HStack {
-                Text("已选择 \(libraryModel.selectedItemCount) 项")
+                Text(L10n("已选择 \(libraryModel.selectedItemCount) 项"))
                     .foregroundStyle(.secondary)
                 Spacer()
-                Button("开始压缩") {
+                Button(L10n("开始压缩")) {
                     libraryModel.startCompression()
                 }
                 .buttonStyle(.borderedProminent)
@@ -1099,9 +1099,9 @@ private struct PhotoSlimiOSLegacyRootView: View {
                         if let sizeLabel = item.sizeLabel {
                             Text(sizeLabel)
                         } else if item.isCloudOnly {
-                            Text("iCloud · 下载后确认大小")
+                            Text(L10n("iCloud · 下载后确认大小"))
                         } else {
-                            Text("大小未知")
+                            Text(L10n("大小未知"))
                         }
                     }
                     .font(.caption)
@@ -1123,21 +1123,21 @@ private struct PhotoSlimiOSLegacyRootView: View {
         if libraryModel.isProcessing {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Label("正在处理", systemImage: "gearshape.2.fill")
+                    Label(L10n("正在处理"), systemImage: "gearshape.2.fill")
                         .font(.headline)
                     Spacer()
-                    Button("终止") { libraryModel.cancelCompression() }
+                    Button(L10n("终止")) { libraryModel.cancelCompression() }
                         .buttonStyle(.bordered)
                 }
                 Text(libraryModel.currentItemName)
                     .lineLimit(1)
                 ProgressView(value: libraryModel.downloadProgress) {
-                    Text("下载原件")
+                    Text(L10n("下载原件"))
                 }
                 ProgressView(value: libraryModel.compressionProgress) {
-                    Text("压缩")
+                    Text(L10n("压缩"))
                 }
-                Text("\(libraryModel.completedItemCount) 项已完成")
+                Text(L10n("\(libraryModel.completedItemCount) 项已完成"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -1151,9 +1151,9 @@ private struct PhotoSlimiOSLegacyRootView: View {
     private var previewCard: some View {
         if !libraryModel.previews.isEmpty && !libraryModel.isProcessing {
             VStack(alignment: .leading, spacing: 14) {
-                Label("检查压缩结果", systemImage: "rectangle.on.rectangle")
+                Label(L10n("检查压缩结果"), systemImage: "rectangle.on.rectangle")
                     .font(.headline)
-                Text("按住预览查看原图。确认后才会写入相册并删除原件。")
+                Text(L10n("按住预览查看原图。确认后才会写入相册并删除原件。"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -1167,12 +1167,12 @@ private struct PhotoSlimiOSLegacyRootView: View {
                 }
 
                 HStack {
-                    Button("撤回压缩副本") {
+                    Button(L10n("撤回压缩副本")) {
                         libraryModel.discardPreviews()
                     }
                     .buttonStyle(.bordered)
                     Spacer()
-                    Button("确认写入相册并删除原件") {
+                    Button(L10n("确认写入相册并删除原件")) {
                         libraryModel.commitPreviews()
                     }
                     .buttonStyle(.borderedProminent)
@@ -1210,7 +1210,7 @@ private struct PhotoSlimiOSPreviewTile: View {
             .frame(height: 150)
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .overlay(alignment: .topTrailing) {
-                Text(showingOriginal ? "原图" : "压缩结果")
+                Text(showingOriginal ? L10n("原图") : L10n("压缩结果"))
                     .font(.caption2.weight(.medium))
                     .padding(.horizontal, 7)
                     .padding(.vertical, 4)
@@ -1234,12 +1234,12 @@ private struct PhotoSlimiOSPreviewTile: View {
                 .font(.caption)
             if let savedBytes = preview.savedBytes {
                 Text(savedBytes >= 0
-                    ? "实际节省 \(ByteCountFormatter.string(fromByteCount: savedBytes, countStyle: .file))"
-                    : "结果更大")
+                    ? L10n("实际节省 \(ByteCountFormatter.string(fromByteCount: savedBytes, countStyle: .file))")
+                    : L10n("结果更大"))
                     .font(.caption2)
                     .foregroundStyle(savedBytes >= 0 ? Color.secondary : Color.orange)
             } else {
-                Text("原件大小未知")
+                Text(L10n("原件大小未知"))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
@@ -1306,7 +1306,7 @@ private struct PhotoSlimiOSPreviewDetail: View {
                     showingOriginal = pressing
                 }, perform: {})
                 .overlay(alignment: .topTrailing) {
-                    Text(showingOriginal ? "原图" : "压缩结果")
+                    Text(showingOriginal ? L10n("原图") : L10n("压缩结果"))
                         .font(.caption.weight(.medium))
                         .padding(.horizontal, 9)
                         .padding(.vertical, 6)
@@ -1321,7 +1321,7 @@ private struct PhotoSlimiOSPreviewDetail: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("完成") {
+                    Button(L10n("完成")) {
                         dismiss()
                     }
                 }
@@ -1423,7 +1423,7 @@ public struct PhotoSlimiOSRootView: View {
                         Button {
                             libraryModel.scanLibrary()
                         } label: {
-                            Label("扫描图库", systemImage: "arrow.clockwise")
+                            Label(L10n("扫描图库"), systemImage: "arrow.clockwise")
                         }
                         .disabled(libraryModel.isScanning || libraryModel.isProcessing)
 
@@ -1432,7 +1432,7 @@ public struct PhotoSlimiOSRootView: View {
                                 libraryModel.selectAllVisible()
                             } label: {
                                 Label(
-                                    libraryModel.allVisibleItemsSelected ? "取消全选" : "全选",
+                                    libraryModel.allVisibleItemsSelected ? L10n("取消全选") : L10n("全选"),
                                     systemImage: libraryModel.allVisibleItemsSelected
                                         ? "checkmark.circle" : "checkmark.circle"
                                 )
@@ -1441,7 +1441,7 @@ public struct PhotoSlimiOSRootView: View {
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
-                    .accessibilityLabel("图库操作")
+                    .accessibilityLabel(L10n("图库操作"))
                 }
             }
 #endif
@@ -1472,17 +1472,17 @@ public struct PhotoSlimiOSRootView: View {
     }
 
     private var navigationTitleText: String {
-        if isReviewing { return "检查压缩结果" }
+        if isReviewing { return L10n("检查压缩结果") }
         switch libraryModel.mediaFilter {
-        case .all: return "全部媒体"
-        case .photo: return "照片"
-        case .video: return "视频"
+        case .all: return L10n("全部媒体")
+        case .photo: return L10n("照片")
+        case .video: return L10n("视频")
         }
     }
 
     private var navigationSubtitleText: String {
-        if isReviewing { return "\(libraryModel.previews.count) 个结果" }
-        return "\(libraryModel.filteredItems.count) 个项目"
+        if isReviewing { return L10n("\(libraryModel.previews.count) 个结果") }
+        return L10n("\(libraryModel.filteredItems.count) 个项目")
     }
 
     private var authorizationContent: some View {
@@ -1492,9 +1492,9 @@ public struct PhotoSlimiOSRootView: View {
                 .foregroundStyle(PhotoSlimiOSTheme.signal)
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("连接照片图库")
+                Text(L10n("连接照片图库"))
                     .font(.title2.weight(.semibold))
-                Text("允许访问后，你可以选择照片和视频生成本地压缩副本。扫描不会修改原件。")
+                Text(L10n("允许访问后，你可以选择照片和视频生成本地压缩副本。扫描不会修改原件。"))
                     .font(.body)
                     .foregroundStyle(.secondary)
             }
@@ -1502,7 +1502,7 @@ public struct PhotoSlimiOSRootView: View {
             if libraryModel.authorizationStatus == .denied
                 || libraryModel.authorizationStatus == .restricted
             {
-                Label("请在系统设置中重新允许照片访问。", systemImage: "lock.fill")
+                Label(L10n("请在系统设置中重新允许照片访问。"), systemImage: "lock.fill")
                     .font(.subheadline)
                     .foregroundStyle(PhotoSlimiOSTheme.warning)
             } else {
@@ -1510,7 +1510,7 @@ public struct PhotoSlimiOSRootView: View {
                     libraryModel.requestPhotoAccess()
                 } label: {
                     Label(
-                        libraryModel.isRequestingAccess ? "正在请求…" : "允许访问照片",
+                        libraryModel.isRequestingAccess ? L10n("正在请求…") : L10n("允许访问照片"),
                         systemImage: "lock.open"
                     )
                     .frame(maxWidth: .infinity, minHeight: PhotoSlimiOSTheme.minimumTouchHeight)
@@ -1563,9 +1563,9 @@ public struct PhotoSlimiOSRootView: View {
                 .background(PhotoSlimiOSTheme.signalSoft, in: Circle())
 
             VStack(alignment: .leading, spacing: 3) {
-                Text("照片图库")
+                Text(L10n("照片图库"))
                     .font(.headline)
-                        Text("\(libraryModel.photoCount) 张照片 · \(libraryModel.videoCount) 个视频")
+                        Text(L10n("\(libraryModel.photoCount) 张照片 · \(libraryModel.videoCount) 个视频"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -1574,7 +1574,7 @@ public struct PhotoSlimiOSRootView: View {
 
             if let availableStorageLabel = libraryModel.availableStorageLabel {
                 VStack(alignment: .trailing, spacing: 3) {
-                    Text("本机可用")
+                    Text(L10n("本机可用"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Text(availableStorageLabel)
@@ -1589,11 +1589,11 @@ public struct PhotoSlimiOSRootView: View {
 
     private var browserControls: some View {
         VStack(alignment: .leading, spacing: 12) {
-            TextField("搜索文件名", text: $libraryModel.searchText)
+            TextField(L10n("搜索文件名"), text: $libraryModel.searchText)
                 .textFieldStyle(.roundedBorder)
                 .frame(minHeight: PhotoSlimiOSTheme.minimumTouchHeight)
 
-            Picker("媒体类型", selection: $libraryModel.mediaFilter) {
+            Picker(L10n("媒体类型"), selection: $libraryModel.mediaFilter) {
                 ForEach(PhotoSlimiOSMediaKind.allCases) { kind in
                     Text(kind.title).tag(kind)
                 }
@@ -1601,11 +1601,11 @@ public struct PhotoSlimiOSRootView: View {
             .pickerStyle(.segmented)
 
             HStack(spacing: 12) {
-                Label("显示方式", systemImage: libraryModel.layoutMode == .list
+                Label(L10n("显示方式"), systemImage: libraryModel.layoutMode == .list
                     ? "list.bullet" : "square.grid.2x2")
                     .font(.subheadline)
                 Spacer()
-                Picker("显示方式", selection: $libraryModel.layoutMode) {
+                Picker(L10n("显示方式"), selection: $libraryModel.layoutMode) {
                     Image(systemName: "list.bullet").tag(PhotoSlimiOSLayoutMode.list)
                     Image(systemName: "square.grid.2x2").tag(PhotoSlimiOSLayoutMode.grid)
                 }
@@ -1618,7 +1618,7 @@ public struct PhotoSlimiOSRootView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     ProgressView(value: libraryModel.scanProgress)
                         .tint(PhotoSlimiOSTheme.signal)
-                    Text("正在读取图库")
+                    Text(L10n("正在读取图库"))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -1633,9 +1633,9 @@ public struct PhotoSlimiOSRootView: View {
         VStack(spacing: 12) {
             ProgressView()
                 .tint(PhotoSlimiOSTheme.signal)
-            Text("正在读取图库")
+            Text(L10n("正在读取图库"))
                 .font(.headline)
-            Text("照片和视频会在列表中逐步出现。")
+            Text(L10n("照片和视频会在列表中逐步出现。"))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -1648,9 +1648,9 @@ public struct PhotoSlimiOSRootView: View {
             Image(systemName: "line.3.horizontal.decrease.circle")
                 .font(.system(size: 32, weight: .light))
                 .foregroundStyle(.secondary)
-            Text("没有符合条件的项目")
+            Text(L10n("没有符合条件的项目"))
                 .font(.headline)
-            Text("换一个媒体类型或搜索词试试。")
+            Text(L10n("换一个媒体类型或搜索词试试。"))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -1688,7 +1688,7 @@ public struct PhotoSlimiOSRootView: View {
                 ProgressView()
                     .tint(PhotoSlimiOSTheme.signal)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("正在准备压缩副本")
+                    Text(L10n("正在准备压缩副本"))
                         .font(.headline)
                     Text(libraryModel.currentItemName)
                         .font(.subheadline)
@@ -1699,16 +1699,16 @@ public struct PhotoSlimiOSRootView: View {
             }
 
             progressRow(
-                title: "下载原件",
+                title: L10n("下载原件"),
                 value: libraryModel.downloadProgress,
                 symbol: "icloud.and.arrow.down"
             )
             progressRow(
-                title: "压缩",
+                title: L10n("压缩"),
                 value: libraryModel.compressionProgress,
                 symbol: "arrow.down.right.and.arrow.up.left"
             )
-            Text("\(libraryModel.completedItemCount) 项已完成")
+            Text(L10n("\(libraryModel.completedItemCount) 项已完成"))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -1738,10 +1738,10 @@ public struct PhotoSlimiOSRootView: View {
     private var reviewContent: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 8) {
-                Label("压缩结果已准备好", systemImage: "checkmark.circle.fill")
+                Label(L10n("压缩结果已准备好"), systemImage: "checkmark.circle.fill")
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(PhotoSlimiOSTheme.success)
-                Text("点按结果放大查看；按住图片可以临时显示原图。原件仍保留在照片图库。")
+                Text(L10n("点按结果放大查看；按住图片可以临时显示原图。原件仍保留在照片图库。"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -1767,13 +1767,13 @@ public struct PhotoSlimiOSRootView: View {
         if libraryModel.isProcessing {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("正在处理")
+                    Text(L10n("正在处理"))
                         .font(.subheadline.weight(.semibold))
                     ProgressView(value: (libraryModel.downloadProgress + libraryModel.compressionProgress) / 2)
                         .tint(PhotoSlimiOSTheme.signal)
                 }
                 Spacer()
-                Button("终止", role: .destructive) {
+                Button(L10n("终止"), role: .destructive) {
                     libraryModel.cancelCompression()
                 }
                 .frame(minHeight: PhotoSlimiOSTheme.minimumTouchHeight)
@@ -1783,16 +1783,16 @@ public struct PhotoSlimiOSRootView: View {
             .background(.bar)
         } else if !libraryModel.previews.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
-                Text("确认结果后再写入相册")
+                Text(L10n("确认结果后再写入相册"))
                     .font(.subheadline.weight(.semibold))
                 HStack(spacing: 10) {
-                    Button("撤回压缩副本") {
+                    Button(L10n("撤回压缩副本")) {
                         libraryModel.discardPreviews()
                     }
                     .buttonStyle(.bordered)
                     .frame(maxWidth: .infinity, minHeight: PhotoSlimiOSTheme.minimumTouchHeight)
 
-                    Button("写入相册并删除原件") {
+                    Button(L10n("写入相册并删除原件")) {
                         libraryModel.commitPreviews()
                     }
                     .buttonStyle(.borderedProminent)
@@ -1806,16 +1806,16 @@ public struct PhotoSlimiOSRootView: View {
         } else if libraryModel.selectedItemCount > 0 {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("已选择 \(libraryModel.selectedItemCount) 项")
+                    Text(L10n("已选择 \(libraryModel.selectedItemCount) 项"))
                         .font(.subheadline.weight(.semibold))
                     if let storage = libraryModel.availableStorageLabel {
-                        Text("可用空间 \(storage)")
+                        Text(L10n("可用空间 \(storage)"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
                 Spacer()
-                Button("开始压缩") {
+                Button(L10n("开始压缩")) {
                     libraryModel.startCompression()
                 }
                 .buttonStyle(.borderedProminent)
@@ -1877,7 +1877,7 @@ private struct PhotoSlimiOSAssetRow: View {
                 if item.isFavorite {
                     Image(systemName: "heart.fill")
                         .foregroundStyle(.pink)
-                        .accessibilityLabel("收藏")
+                        .accessibilityLabel(L10n("收藏"))
                 }
 
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
@@ -1894,7 +1894,7 @@ private struct PhotoSlimiOSAssetRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(assetAccessibilityLabel)
-        .accessibilityValue(isSelected ? "已选择" : "未选择")
+        .accessibilityValue(isSelected ? L10n("已选择") : L10n("未选择"))
     }
 
     private var assetAccessibilityLabel: String {
@@ -1902,7 +1902,7 @@ private struct PhotoSlimiOSAssetRow: View {
         if let sizeLabel = item.sizeLabel {
             values.append(sizeLabel)
         } else if item.isCloudOnly {
-            values.append("iCloud 原件")
+            values.append(L10n("iCloud 原件"))
         }
         return values.joined(separator: "，")
     }
@@ -1958,7 +1958,7 @@ private struct PhotoSlimiOSAssetGridTile: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(item.displayTitle)
-        .accessibilityValue(isSelected ? "已选择" : "未选择")
+        .accessibilityValue(isSelected ? L10n("已选择") : L10n("未选择"))
     }
 }
 
@@ -2042,7 +2042,7 @@ private struct PhotoSlimiOSReviewTile: View {
             .aspectRatio(4 / 3, contentMode: .fit)
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(alignment: .topTrailing) {
-                Text(showingOriginal ? "原图" : "压缩结果")
+                Text(showingOriginal ? L10n("原图") : L10n("压缩结果"))
                     .font(.caption.weight(.semibold))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 5)
@@ -2063,12 +2063,12 @@ private struct PhotoSlimiOSReviewTile: View {
 
             if let savedBytes = preview.savedBytes {
                 Text(savedBytes >= 0
-                    ? "实际节省 \(ByteCountFormatter.string(fromByteCount: savedBytes, countStyle: .file))"
-                    : "结果更大")
+                    ? L10n("实际节省 \(ByteCountFormatter.string(fromByteCount: savedBytes, countStyle: .file))")
+                    : L10n("结果更大"))
                     .font(.caption)
                     .foregroundStyle(savedBytes >= 0 ? .secondary : PhotoSlimiOSTheme.warning)
             } else {
-                Text("原件大小未知")
+                Text(L10n("原件大小未知"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -2077,8 +2077,8 @@ private struct PhotoSlimiOSReviewTile: View {
             PhotoSlimiOSPreviewDetail(preview: preview)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(preview.sourceFilename)，压缩结果")
-        .accessibilityHint("点按放大，按住查看原图")
+        .accessibilityLabel(L10n("\(preview.sourceFilename)，压缩结果"))
+        .accessibilityHint(L10n("点按放大，按住查看原图"))
     }
 
     @ViewBuilder

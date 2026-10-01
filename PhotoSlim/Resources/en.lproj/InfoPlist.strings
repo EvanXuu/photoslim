@@ -1,0 +1,2 @@
+"NSPhotoLibraryUsageDescription" = "PhotoSlim reads your photo library, downloads selected iCloud originals, and creates compressed previews on your device. Originals are deleted only after you confirm.";
+"NSPhotoLibraryAddUsageDescription" = "PhotoSlim saves the compressed results you approve to your photo library.";

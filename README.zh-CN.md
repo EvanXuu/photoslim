@@ -6,6 +6,17 @@ PhotoSlim 是一款同时提供 macOS 与 iOS 客户端的原生 Apple 照片压
 
 [English](README.md) · [查看 Releases](https://github.com/EvanXuu/photoslim/releases) · [阅读产品需求](PRD-PhotoSlim.md) · [查看设计系统](PhotoSlim/DESIGN_SYSTEM.md)
 
+## 开发中版本
+
+以下变更已进入源码，尚未包含在原有 0.2beta 下载包中：
+
+- 英文与简体中文界面，包括照片授权说明；跟随设备首选语言，其他语言回退为英文。
+- iPhone 网格按容器宽度适配，紧凑操作支持辅助功能，照片审核支持捏合和双击缩放。使用 iOS 27.1 SDK 时，Duo 审核页按折叠区域调整媒体与对比控件位置。
+- 可选的 CloudKit 跨设备处理记录，避免另一台设备重复压缩已完成项目。仅最终确认完成的任务写入用户的私有数据库，不上传媒体。
+- 本地测试包不再携带无法获准的 CloudKit 权限；只有正确签名并配置容器后才启用云端记录，本地扫描、压缩和历史不受影响。
+
+详见 [CloudKit 配置与验收说明](docs/CloudKit-setup.md) 和 [未发布更新日志](CHANGELOG.zh-CN.md)。
+
 ## 功能概览
 
 - 将普通 JPEG 照片转换为 HEIC，将 SDR H.264 视频转换为 HEVC。
@@ -65,7 +76,9 @@ PhotoSlim 会尽可能复制并验证 PhotoKit 能提供的新资产元数据，
 - iPhone 目标最低支持 iOS 17。
 - 已允许读取和添加 Apple 照片图库。
 - 有足够空间容纳所选 iCloud 原件、临时输出和安全余量。
-- 从源码构建需要 Xcode Command Line Tools 和 Swift 6 工具链。
+- 从源码构建需要 Xcode 27、macOS/iOS 27 SDK 与 Swift 6 工具链。最低运行版本仍为 macOS 14 与 iOS 17。
+
+本轮环境安装的是 Xcode 27.1，其中 macOS SDK 为 27.0，iOS SDK 为 27.1。Apple 目前将 Xcode 27 列为正式版、27.1 列为 Beta；使用 27.1 SDK 构建不等于通过 iOS 27.0 正式 SDK 验证。Duo 的 `ArrangementView` 使用 SDK 27.1/27.2 条件编译和运行时判断；27.0 源码构建沿用自适应布局回退。参考 [Apple Xcode 支持表](https://developer.apple.com/xcode/system-requirements) 和 [Duo 开发说明](https://developer.apple.com/iphone-duo/)。
 
 包中已加入最低 iOS 17 的 SwiftUI 目标。它直接复用 macOS 应用的 AppModel、PhotoKit 扫描、空间检查、压缩、队列、会话恢复、统计、历史及审核写回流程；iPhone 端只单独适配原生导航和触控界面，包括左上角媒体类型、右上角筛选与更多、下拉搜索和四个底部工作区。选中任意项目后，工作区栏会暂时替换为胶囊状态栏；iOS 26 使用原生 Liquid Glass，iOS 17–25 使用系统材质回退。
 
@@ -99,6 +112,8 @@ PhotoSlim/Scripts/build-ios-simulator-app.sh
 
 模拟器 ZIP 输出到 `PhotoSlim/build/PhotoSlim-iOS-Simulator.app.zip`；供 `simctl` 直接安装的签名 `.app` 默认位于 `/private/tmp/PhotoSlim-iOS-Simulator-build`。
 
+打包脚本默认生成仅本地功能的包，ad-hoc 签名不能授权 CloudKit。iPhone 的云端记录测试需在 Xcode 中配置真实开发团队、自动签名和匹配的容器；macOS 需按配置文档提供 `PHOTOSLIM_CLOUDKIT_ENABLED=1`、`PHOTOSLIM_SIGNING_IDENTITY` 与 `PHOTOSLIM_PROVISIONING_PROFILE`。模拟器 ZIP 不能安装到真实 iPhone。
+
 ## 隐私与许可证
 
-PhotoSlim 不包含遥测或云端服务，媒体处理在本机完成；只有 Photos/iCloud 自身可能产生网络流量。PhotoSlim 是基于 [MIT 许可证](LICENSE)发布的开源软件。
+PhotoSlim 不包含遥测，也没有 PhotoSlim 自营服务器。媒体处理在本机完成，Photos/iCloud 可以下载或同步图库原件。正确签名的版本启用跨设备记录后，只将稳定的 Photos 云端资产标识、原件/结果关系、完成时间、状态和记录版本同步到用户自己的私有 CloudKit 数据库；不会上传照片/视频内容、缩略图、文件名、位置或其他媒体元数据。可在压缩设置中关闭同步，仅保留本机记录。PhotoSlim 是基于 [MIT 许可证](LICENSE) 发布的开源软件。

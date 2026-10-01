@@ -1,3 +1,6 @@
+#if SWIFT_PACKAGE
+import PhotoSlimMediaCore
+#endif
 import AppKit
 import SwiftUI
 
@@ -9,18 +12,18 @@ final class PhotoSlimAppDelegate: NSObject, NSApplicationDelegate {
 
     let first = NSAlert()
     first.alertStyle = .warning
-    first.messageText = "任务尚未完成"
-    first.informativeText = "退出后任务会暂停，重新打开 PhotoSlim 可继续。"
-    first.addButton(withTitle: "留在 PhotoSlim")
-    first.addButton(withTitle: "仍要退出…")
+    first.messageText = L10n("任务尚未完成")
+    first.informativeText = L10n("退出后任务会暂停，重新打开 PhotoSlim 可继续。")
+    first.addButton(withTitle: L10n("留在 PhotoSlim"))
+    first.addButton(withTitle: L10n("仍要退出…"))
     guard first.runModal() == .alertSecondButtonReturn else { return .terminateCancel }
 
     let second = NSAlert()
     second.alertStyle = .critical
-    second.messageText = "确认退出并保留会话？"
-    second.informativeText = "任务会保留，重新打开后仍需选择“撤回压缩副本”或“确认删除原件”。"
-    second.addButton(withTitle: "取消")
-    second.addButton(withTitle: "退出并保留会话")
+    second.messageText = L10n("确认退出并保留会话？")
+    second.informativeText = L10n("任务会保留，重新打开后仍需选择“撤回压缩副本”或“确认删除原件”。")
+    second.addButton(withTitle: L10n("取消"))
+    second.addButton(withTitle: L10n("退出并保留会话"))
     return second.runModal() == .alertSecondButtonReturn ? .terminateNow : .terminateCancel
   }
 }
@@ -44,7 +47,7 @@ struct PhotoSlimApp: App {
     .windowToolbarStyle(.unified(showsTitle: true))
     .commands {
       CommandGroup(after: .sidebar) {
-        Button("扫描照片图库变更") { model.scanLibrary() }
+        Button(L10n("扫描照片图库变更")) { model.scanLibrary() }
           .keyboardShortcut("r", modifiers: [.command])
           .disabled(!model.accessState.canRead || model.isScanning)
       }

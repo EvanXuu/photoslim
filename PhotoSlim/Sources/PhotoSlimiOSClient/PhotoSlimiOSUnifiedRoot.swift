@@ -1,3 +1,6 @@
+#if SWIFT_PACKAGE
+import PhotoSlimMediaCore
+#endif
 #if os(iOS) && PHOTOSLIM_UNIFIED_APP
 import SwiftUI
 
@@ -11,10 +14,10 @@ enum PhotoSlimiOSWorkspace: String, CaseIterable, Identifiable {
 
   var title: String {
     switch self {
-    case .library: return "图库"
-    case .queue: return "队列"
-    case .statistics: return "统计"
-    case .history: return "历史"
+    case .library: return L10n("图库")
+    case .queue: return L10n("队列")
+    case .statistics: return L10n("统计")
+    case .history: return L10n("历史")
     }
   }
 
@@ -48,6 +51,7 @@ enum PhotoSlimiOSWorkspace: String, CaseIterable, Identifiable {
 
 @MainActor
 struct PhotoSlimiOSUnifiedRootView: View {
+  @Environment(\.scenePhase) private var scenePhase
   @StateObject private var model = AppModel()
   @State private var workspace = PhotoSlimiOSWorkspace.library
   @State private var showsSettings = false
@@ -61,6 +65,14 @@ struct PhotoSlimiOSUnifiedRootView: View {
     }
     .environmentObject(model)
     .task { model.bootstrap() }
+    .onChange(of: scenePhase) { _, phase in
+      if phase == .active {
+        model.refreshStorageStatus()
+        model.retryProcessedAssetSync()
+      } else {
+        model.savePreferences()
+      }
+    }
     .onChange(of: workspace) { _, value in
       let destination = value.modelDestination
       if value != .library || !isLibraryDestination(model.destination) {
@@ -84,7 +96,7 @@ struct PhotoSlimiOSUnifiedRootView: View {
       Alert(
         title: Text(notice.title),
         message: Text(notice.message),
-        dismissButton: .default(Text("好"))
+        dismissButton: .default(Text(L10n("好")))
       )
     }
   }

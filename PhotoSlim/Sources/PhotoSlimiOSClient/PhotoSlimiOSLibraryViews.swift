@@ -1,15 +1,32 @@
+#if SWIFT_PACKAGE
+import PhotoSlimMediaCore
+#endif
 #if os(iOS) && PHOTOSLIM_UNIFIED_APP
 import Photos
 import SwiftUI
 import UIKit
 
 enum PhotoSlimiOSUnifiedTheme {
-  static let signal = Color(red: 0.78, green: 0.32, blue: 0.04)
-  static let signalSoft = Color(red: 0.78, green: 0.32, blue: 0.04).opacity(0.12)
-  static let success = Color(red: 0.14, green: 0.55, blue: 0.30)
-  static let danger = Color(red: 0.74, green: 0.18, blue: 0.16)
+  // The slightly deeper light amber remains readable on grouped backgrounds.
+  static let signal = adaptiveColor(light: 0xB04F0D, dark: 0xDE8436)
+  static let signalForeground = adaptiveColor(light: 0xFFFFFF, dark: 0x131313)
+  static let signalSoft = signal.opacity(0.12)
+  static let success = adaptiveColor(light: 0x24753F, dark: 0x74C995)
+  static let danger = adaptiveColor(light: 0xBD2E29, dark: 0xFF928A)
   static let canvas = Color(.systemGroupedBackground)
   static let thumbnail = Color(.secondarySystemGroupedBackground)
+
+  private static func adaptiveColor(light: UInt32, dark: UInt32) -> Color {
+    Color(uiColor: UIColor { traits in
+      let rgb = traits.userInterfaceStyle == .dark ? dark : light
+      return UIColor(
+        red: CGFloat((rgb >> 16) & 0xFF) / 255,
+        green: CGFloat((rgb >> 8) & 0xFF) / 255,
+        blue: CGFloat(rgb & 0xFF) / 255,
+        alpha: 1
+      )
+    })
+  }
 }
 
 @MainActor
@@ -37,14 +54,16 @@ struct PhotoSlimiOSLibraryWorkspace: View {
         Button {
           showsFilters = true
         } label: {
-          Image(
-            systemName: activeFilterCount > 0
+          Label(
+            L10n("筛选"),
+            systemImage: activeFilterCount > 0
               ? "line.3.horizontal.decrease.circle.fill"
               : "line.3.horizontal.decrease.circle"
           )
+          .labelStyle(.iconOnly)
         }
         .accessibilityLabel(
-          activeFilterCount > 0 ? "筛选，已启用 \(activeFilterCount) 项" : "筛选"
+          activeFilterCount > 0 ? L10n("筛选，已启用 \(activeFilterCount) 项") : L10n("筛选")
         )
 
         moreMenu
@@ -111,15 +130,16 @@ struct PhotoSlimiOSLibraryWorkspace: View {
         mediaMenuLabel(for: .favorites)
       }
     } label: {
-      Image(systemName: model.destination.symbol)
+      Label(navigationTitle, systemImage: model.destination.symbol)
+        .labelStyle(.iconOnly)
         .frame(width: 30, height: 30)
     }
-    .accessibilityLabel("媒体类型：\(navigationTitle)")
+    .accessibilityLabel(L10n("媒体类型：\(navigationTitle)"))
   }
 
   private var moreMenu: some View {
     Menu {
-      Menu("排序") {
+      Menu(L10n("排序")) {
         ForEach(SortOption.allCases.filter(\.isVisible)) { option in
           Button {
             model.filter.sortOption = option
@@ -134,16 +154,16 @@ struct PhotoSlimiOSLibraryWorkspace: View {
         }
       }
 
-      Menu("显示方式") {
+      Menu(L10n("显示方式")) {
         Button {
           model.filter.layoutMode = .grid
         } label: {
-          Label("网格", systemImage: model.filter.layoutMode == .grid ? "checkmark" : "square.grid.2x2")
+          Label(L10n("网格"), systemImage: model.filter.layoutMode == .grid ? "checkmark" : "square.grid.2x2")
         }
         Button {
           model.filter.layoutMode = .list
         } label: {
-          Label("列表", systemImage: model.filter.layoutMode == .list ? "checkmark" : "list.bullet")
+          Label(L10n("列表"), systemImage: model.filter.layoutMode == .list ? "checkmark" : "list.bullet")
         }
       }
 
@@ -153,7 +173,7 @@ struct PhotoSlimiOSLibraryWorkspace: View {
         model.selectAllVisible()
       } label: {
         Label(
-          model.allVisibleItemsSelected ? "取消全选" : "全选",
+          model.allVisibleItemsSelected ? L10n("取消全选") : L10n("全选"),
           systemImage: model.allVisibleItemsSelected ? "xmark.circle" : "checkmark.circle"
         )
       }
@@ -161,7 +181,7 @@ struct PhotoSlimiOSLibraryWorkspace: View {
       Button {
         showsSettings = true
       } label: {
-        Label("压缩参数", systemImage: "slider.horizontal.3")
+        Label(L10n("压缩参数"), systemImage: "slider.horizontal.3")
       }
 
       Divider()
@@ -169,20 +189,21 @@ struct PhotoSlimiOSLibraryWorkspace: View {
       Button {
         model.scanLibrary()
       } label: {
-        Label("扫描图库变更", systemImage: "arrow.clockwise")
+        Label(L10n("扫描图库变更"), systemImage: "arrow.clockwise")
       }
       .disabled(model.isScanning || model.isLoadingLibraryIndex)
 
       Button {
         model.refreshStorageStatus()
       } label: {
-        Label("刷新存储空间", systemImage: "internaldrive")
+        Label(L10n("刷新存储空间"), systemImage: "internaldrive")
       }
     } label: {
-      Image(systemName: "ellipsis.circle")
+      Label(L10n("更多"), systemImage: "ellipsis.circle")
+        .labelStyle(.iconOnly)
         .frame(width: 30, height: 30)
     }
-    .accessibilityLabel("更多")
+    .accessibilityLabel(L10n("更多"))
   }
 
   @ViewBuilder
@@ -196,11 +217,11 @@ struct PhotoSlimiOSLibraryWorkspace: View {
 
   private var navigationTitle: String {
     switch model.destination {
-    case .library: return "照片图库"
-    case .photos: return "照片"
-    case .videos: return "视频"
-    case .favorites: return "收藏"
-    case .queue, .statistics, .history: return "照片图库"
+    case .library: return L10n("照片图库")
+    case .photos: return L10n("照片")
+    case .videos: return L10n("视频")
+    case .favorites: return L10n("收藏")
+    case .queue, .statistics, .history: return L10n("照片图库")
     }
   }
 
@@ -230,12 +251,12 @@ private struct PhotoSlimiOSScanProgressStrip: View {
       Text(
         model.scanTotal > 0
           ? "\(model.scanCompleted)/\(model.scanTotal)"
-          : "扫描中"
+          : L10n("扫描中")
       )
       .font(.caption.monospacedDigit())
       .foregroundStyle(.secondary)
 
-      Button("停止") { model.cancelScan() }
+      Button(L10n("停止")) { model.cancelScan() }
         .font(.caption.weight(.semibold))
     }
     .padding(.horizontal, 16)
@@ -248,7 +269,7 @@ private struct PhotoSlimiOSScanProgressStrip: View {
 private struct PhotoSlimiOSLibraryLoadingState: View {
   var body: some View {
     ContentUnavailableView {
-      Label("正在读取图库", systemImage: "photo.stack")
+      Label(L10n("正在读取图库"), systemImage: "photo.stack")
     }
     .overlay(alignment: .top) {
       ProgressView()
@@ -263,11 +284,11 @@ private struct PhotoSlimiOSEmptyLibraryState: View {
   var body: some View {
     ContentUnavailableView {
       Label(
-        isScanning ? "正在扫描图库" : "没有符合条件的项目",
+        isScanning ? L10n("正在扫描图库") : L10n("没有符合条件的项目"),
         systemImage: isScanning ? "photo.stack" : "line.3.horizontal.decrease.circle"
       )
     } description: {
-      Text(isScanning ? "项目会在扫描完成后显示。" : "下拉可以搜索，也可以调整右上角的筛选条件。")
+      Text(isScanning ? L10n("项目会在扫描完成后显示。") : L10n("下拉可以搜索，也可以调整右上角的筛选条件。"))
     }
   }
 }
@@ -275,15 +296,18 @@ private struct PhotoSlimiOSEmptyLibraryState: View {
 @MainActor
 private struct PhotoSlimiOSSharedAssetGrid: View {
   @EnvironmentObject private var model: AppModel
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
   @State private var positionedBelowSearch = false
   let assets: [MediaAsset]
-  private let columns = [
-    GridItem(.flexible(minimum: 120), spacing: 10),
-    GridItem(.flexible(minimum: 120), spacing: 10),
-  ]
 
   var body: some View {
     GeometryReader { geometry in
+      let columns = Array(
+        repeating: GridItem(.flexible(minimum: 0), spacing: 10),
+        count: AdaptiveMediaLayout.columnCount(
+          width: geometry.size.width, accessibilitySize: dynamicTypeSize.isAccessibilitySize
+        )
+      )
       ScrollViewReader { proxy in
         ScrollView {
           PhotoSlimiOSPullDownSearchField()
@@ -305,7 +329,7 @@ private struct PhotoSlimiOSSharedAssetGrid: View {
                   model.togglePinned(asset)
                 } label: {
                   Label(
-                    asset.isPinned ? "取消置顶" : "置顶",
+                    asset.isPinned ? L10n("取消置顶") : L10n("置顶"),
                     systemImage: asset.isPinned ? "pin.slash" : "pin"
                   )
                 }
@@ -363,7 +387,7 @@ private struct PhotoSlimiOSSharedAssetList: View {
                   model.togglePinned(asset)
                 } label: {
                   Label(
-                    asset.isPinned ? "取消置顶" : "置顶",
+                    asset.isPinned ? L10n("取消置顶") : L10n("置顶"),
                     systemImage: asset.isPinned ? "pin.slash" : "pin"
                   )
                 }
@@ -407,7 +431,7 @@ private struct PhotoSlimiOSPullDownSearchField: View {
       Image(systemName: "magnifyingglass")
         .foregroundStyle(.secondary)
 
-      TextField("搜索文件名", text: $model.filter.searchText)
+      TextField(L10n("搜索文件名"), text: $model.filter.searchText)
         .focused($isFocused)
         .textInputAutocapitalization(.never)
         .autocorrectionDisabled()
@@ -421,7 +445,7 @@ private struct PhotoSlimiOSPullDownSearchField: View {
             .foregroundStyle(.secondary)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("清除搜索")
+        .accessibilityLabel(L10n("清除搜索"))
       }
     }
     .padding(.horizontal, 13)
@@ -452,7 +476,7 @@ private struct PhotoSlimiOSSharedAssetGridTile: View {
             Image(systemName: "checkmark.circle.fill")
               .font(.title3)
               .symbolRenderingMode(.palette)
-              .foregroundStyle(.white, PhotoSlimiOSUnifiedTheme.signal)
+              .foregroundStyle(PhotoSlimiOSUnifiedTheme.signalForeground, PhotoSlimiOSUnifiedTheme.signal)
               .padding(8)
           } else if asset.isPinned {
             Image(systemName: "pin.fill")
@@ -477,7 +501,7 @@ private struct PhotoSlimiOSSharedAssetGridTile: View {
     }
     .buttonStyle(.plain)
     .accessibilityLabel(assetAccessibilityDescription(asset))
-    .accessibilityValue(selected ? "已选择" : "未选择")
+    .accessibilityValue(selected ? L10n("已选择") : L10n("未选择"))
   }
 }
 
@@ -512,7 +536,7 @@ private struct PhotoSlimiOSSharedAssetRow: View {
             .lineLimit(1)
 
           if !asset.canProcess {
-            Text(asset.exclusionReasons.first(where: \.isHardBlock)?.title ?? "暂不可处理")
+            Text(asset.exclusionReasons.first(where: \.isHardBlock)?.title ?? L10n("暂不可处理"))
               .font(.caption2.weight(.medium))
               .foregroundStyle(.secondary)
               .lineLimit(1)
@@ -533,7 +557,7 @@ private struct PhotoSlimiOSSharedAssetRow: View {
     }
     .buttonStyle(.plain)
     .accessibilityLabel(assetAccessibilityDescription(asset))
-    .accessibilityValue(selected ? "已选择" : "未选择")
+    .accessibilityValue(selected ? L10n("已选择") : L10n("未选择"))
   }
 }
 
@@ -608,7 +632,7 @@ struct PhotoSlimiOSBottomStatusBar: View {
   private var selectionContent: some View {
     HStack(spacing: 10) {
       VStack(alignment: .leading, spacing: 2) {
-        Text("已选 \(model.selectedIdentifiers.count) 项")
+        Text(L10n("已选 \(model.selectedIdentifiers.count) 项"))
           .font(.subheadline.weight(.semibold))
           .lineLimit(1)
         Text(storageSummary)
@@ -623,7 +647,10 @@ struct PhotoSlimiOSBottomStatusBar: View {
       Button {
         showsSettings = true
       } label: {
-        Label("参数", systemImage: "slider.horizontal.3")
+        ViewThatFits(in: .horizontal) {
+          Label(L10n("参数"), systemImage: "slider.horizontal.3")
+          Image(systemName: "slider.horizontal.3")
+        }
           .font(.subheadline.weight(.semibold))
           .padding(.horizontal, 12)
           .frame(minHeight: 44)
@@ -633,10 +660,11 @@ struct PhotoSlimiOSBottomStatusBar: View {
           )
       }
       .buttonStyle(.plain)
+      .accessibilityLabel(L10n("参数"))
       .accessibilityHint(model.settings.summary(for: selectedMediaKind))
 
       Button(action: startAction) {
-        Text(model.currentSession?.phase.blocksNewTask == true ? "入队" : "下一步")
+        Text(model.currentSession?.phase.blocksNewTask == true ? L10n("入队") : L10n("下一步"))
           .font(.subheadline.weight(.semibold))
           .padding(.horizontal, 6)
           .frame(minHeight: 44)
@@ -644,6 +672,7 @@ struct PhotoSlimiOSBottomStatusBar: View {
       .buttonStyle(.borderedProminent)
       .buttonBorderShape(.capsule)
       .tint(PhotoSlimiOSUnifiedTheme.signal)
+      .foregroundStyle(PhotoSlimiOSUnifiedTheme.signalForeground)
     }
   }
 
@@ -654,7 +683,7 @@ struct PhotoSlimiOSBottomStatusBar: View {
         .frame(width: 44)
 
       VStack(alignment: .leading, spacing: 2) {
-        Text("正在处理 \(session.completedItemCount)/\(session.items.count)")
+        Text(L10n("正在处理 \(session.completedItemCount)/\(session.items.count)"))
           .font(.caption.weight(.semibold))
         Text(session.statusMessage)
           .font(.caption2)
@@ -664,7 +693,7 @@ struct PhotoSlimiOSBottomStatusBar: View {
 
       Spacer(minLength: 0)
 
-      Button("查看") { model.restoreTaskPanel() }
+      Button(L10n("查看")) { model.restoreTaskPanel() }
         .buttonStyle(.bordered)
         .buttonBorderShape(.roundedRectangle(radius: 12))
     }
@@ -677,9 +706,9 @@ struct PhotoSlimiOSBottomStatusBar: View {
 
   private var storageSummary: String {
     if let storage = model.localStorageReport {
-      return "\(MediaFormatting.bytes(storage.availableBytes)) 可用 · 共 \(MediaFormatting.bytes(storage.totalBytes))"
+      return L10n("\(MediaFormatting.bytes(storage.availableBytes)) 可用 · 共 \(MediaFormatting.bytes(storage.totalBytes))")
     }
-    return model.storageStatusError == nil ? "正在读取存储空间" : "存储空间暂不可用"
+    return model.storageStatusError == nil ? L10n("正在读取存储空间") : L10n("存储空间暂不可用")
   }
 }
 
@@ -693,11 +722,11 @@ struct PhotoSlimiOSFilterSheet: View {
     NavigationStack {
       Form {
         Section {
-          Toggle("仅显示收藏", isOn: $model.filter.favoritesOnly)
+          Toggle(L10n("仅显示收藏"), isOn: $model.filter.favoritesOnly)
         }
 
-        Section("时间") {
-          Picker("拍摄时间", selection: $model.filter.timeFilter) {
+        Section(L10n("时间")) {
+          Picker(L10n("拍摄时间"), selection: $model.filter.timeFilter) {
             ForEach(TimeFilter.allCases) { value in
               Text(value.title).tag(value)
             }
@@ -705,7 +734,7 @@ struct PhotoSlimiOSFilterSheet: View {
 
           if model.filter.timeFilter == .customOlderThan {
             Stepper(
-              "\(model.filter.customMinimumAgeYears ?? 10) 年以上",
+              L10n("\(model.filter.customMinimumAgeYears ?? 10) 年以上"),
               value: Binding(
                 get: { model.filter.customMinimumAgeYears ?? 10 },
                 set: { model.filter.customMinimumAgeYears = $0 }
@@ -714,7 +743,7 @@ struct PhotoSlimiOSFilterSheet: View {
             )
           } else if model.filter.timeFilter == .custom {
             DatePicker(
-              "开始日期",
+              L10n("开始日期"),
               selection: Binding(
                 get: { model.filter.customStartDate ?? .distantPast },
                 set: { model.filter.customStartDate = $0 }
@@ -722,7 +751,7 @@ struct PhotoSlimiOSFilterSheet: View {
               displayedComponents: .date
             )
             DatePicker(
-              "结束日期",
+              L10n("结束日期"),
               selection: Binding(
                 get: { model.filter.customEndDate ?? Date() },
                 set: { model.filter.customEndDate = $0 }
@@ -732,8 +761,8 @@ struct PhotoSlimiOSFilterSheet: View {
           }
         }
 
-        Section("大小") {
-          Picker("原件大小", selection: $model.filter.sizeFilter) {
+        Section(L10n("大小")) {
+          Picker(L10n("原件大小"), selection: $model.filter.sizeFilter) {
             ForEach(SizeFilter.pickerCases) { value in
               Text(value.title).tag(value)
             }
@@ -743,15 +772,15 @@ struct PhotoSlimiOSFilterSheet: View {
             TextField("MB", value: minimumMegabytes, format: .number)
               .keyboardType(.numberPad)
           } else if model.filter.sizeFilter == .custom {
-            TextField("最小 MB", value: minimumMegabytes, format: .number)
+            TextField(L10n("最小 MB"), value: minimumMegabytes, format: .number)
               .keyboardType(.numberPad)
-            TextField("最大 MB", value: maximumMegabytes, format: .number)
+            TextField(L10n("最大 MB"), value: maximumMegabytes, format: .number)
               .keyboardType(.numberPad)
           }
         }
 
-        Section("位置") {
-          Picker("原件位置", selection: $model.filter.cloudFilter) {
+        Section(L10n("位置")) {
+          Picker(L10n("原件位置"), selection: $model.filter.cloudFilter) {
             ForEach(CloudFilter.allCases) { value in
               Text(value.title).tag(value)
             }
@@ -759,7 +788,7 @@ struct PhotoSlimiOSFilterSheet: View {
         }
 
         Section {
-          DisclosureGroup("排除项目") {
+          DisclosureGroup(L10n("排除项目")) {
             ForEach(ExclusionReason.allCases.filter { $0 != .lowSavings }) { reason in
               Toggle(
                 reason.title,
@@ -777,11 +806,11 @@ struct PhotoSlimiOSFilterSheet: View {
             }
           }
         } footer: {
-          Text("取消排除后，相关项目会出现在图库中，但受保护的格式仍不能加入任务。")
+          Text(L10n("取消排除后，相关项目会出现在图库中，但受保护的格式仍不能加入任务。"))
         }
 
         Section {
-          Button("恢复默认筛选", role: .destructive) {
+          Button(L10n("恢复默认筛选"), role: .destructive) {
             let searchText = model.filter.searchText
             let layoutMode = model.filter.layoutMode
             let sortOption = model.filter.sortOption
@@ -792,21 +821,23 @@ struct PhotoSlimiOSFilterSheet: View {
           }
         }
       }
-      .navigationTitle("筛选")
+      .navigationTitle(L10n("筛选"))
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
         ToolbarItem(placement: .confirmationAction) {
-          Button("完成") {
+          Button {
             model.savePreferences()
             dismiss()
+          } label: {
+            Label(L10n("完成"), systemImage: "checkmark")
           }
         }
       }
       .alert(item: $warningReason) { reason in
         Alert(
-          title: Text("显示“\(reason.title)”？"),
+          title: Text(L10n("显示“\(reason.title)”？")),
           message: Text(reason.warning),
-          primaryButton: .destructive(Text("仍要显示")) {
+          primaryButton: .destructive(Text(L10n("仍要显示"))) {
             model.filter.excludedReasons.remove(reason)
             model.savePreferences()
           },
@@ -834,6 +865,7 @@ struct PhotoSlimiOSFilterSheet: View {
 @MainActor
 struct PhotoSlimiOSCompressionSettingsSheet: View {
   @Environment(\.dismiss) private var dismiss
+  @EnvironmentObject private var model: AppModel
   @State private var draft: CompressionSettings
   let mediaKind: MediaKind?
   let onSave: (CompressionSettings) -> Void
@@ -852,9 +884,9 @@ struct PhotoSlimiOSCompressionSettingsSheet: View {
     NavigationStack {
       Form {
         if mediaKind != .video {
-          Section("照片") {
+          Section(L10n("照片")) {
             HStack {
-              Text("HEIC 质量")
+              Text(L10n("HEIC 质量"))
               Slider(value: $draft.photoQuality, in: 0.5...1, step: 0.01)
               Text("\(Int((draft.photoQuality * 100).rounded()))%")
                 .monospacedDigit()
@@ -865,7 +897,7 @@ struct PhotoSlimiOSCompressionSettingsSheet: View {
 
         if mediaKind != .photo {
           Section {
-            Picker("编码方式", selection: $draft.videoEncodingMode) {
+            Picker(L10n("编码方式"), selection: $draft.videoEncodingMode) {
               ForEach(VideoEncodingMode.allCases) { mode in
                 Text(mode.title).tag(mode)
               }
@@ -874,46 +906,70 @@ struct PhotoSlimiOSCompressionSettingsSheet: View {
 
             if draft.videoEncodingMode == .manual {
               bitrateEditor
-              Toggle("允许帧重排", isOn: $draft.videoAllowFrameReordering)
-              Picker("音频", selection: $draft.audioPolicy) {
+              Toggle(L10n("允许帧重排"), isOn: $draft.videoAllowFrameReordering)
+              Picker(L10n("音频"), selection: $draft.audioPolicy) {
                 ForEach(AudioPolicy.allCases) { policy in
                   Text(policy.title).tag(policy)
                 }
               }
             }
           } header: {
-            Text("视频")
+            Text(L10n("视频"))
           } footer: {
             if draft.videoEncodingMode == .manual {
-              Text("非标准分辨率会按像素数量和帧率从这些数值计算目标码率。")
+              Text(L10n("非标准分辨率会按像素数量和帧率从这些数值计算目标码率。"))
             }
           }
         }
 
         Section {
           HStack {
-            Text("最低实际节省")
+            Text(L10n("最低实际节省"))
             Slider(value: $draft.minimumSavingsRatio, in: 0...0.5, step: 0.01)
             Text("\(Int((draft.minimumSavingsRatio * 100).rounded()))%")
               .monospacedDigit()
               .foregroundStyle(.secondary)
           }
         } header: {
-          Text("任务安全")
+          Text(L10n("任务安全"))
         } footer: {
-          Text("结果未达到这个比例时会被丢弃，不会写入照片图库。")
+          Text(L10n("结果未达到这个比例时会被丢弃，不会写入照片图库。"))
+        }
+
+        Section {
+          Toggle(
+            L10n("同步已处理项目"),
+            isOn: Binding(
+              get: { model.processedAssetSync.isEnabled },
+              set: { value in model.setProcessedAssetSyncEnabled(value) }
+            )
+          )
+          .disabled(!model.processedAssetSync.isConfigured)
+          LabeledContent(L10n("状态"), value: model.processedAssetSync.statusTitle)
+          if model.processedAssetSync.isConfigured, model.processedAssetSync.isEnabled,
+            model.processedAssetSync.phase != .synced
+          {
+            Button(L10n("重新同步")) { model.retryProcessedAssetSync() }
+              .frame(minHeight: 44)
+          }
+        } header: {
+          Text(L10n("跨设备记录"))
+        } footer: {
+          Text(model.processedAssetSync.statusDetail)
         }
       }
-      .navigationTitle("压缩参数")
+      .navigationTitle(L10n("压缩参数"))
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
         ToolbarItem(placement: .cancellationAction) {
-          Button("取消") { dismiss() }
+          Button { dismiss() } label: { Label(L10n("取消"), systemImage: "xmark") }
         }
         ToolbarItem(placement: .confirmationAction) {
-          Button("保存") {
+          Button {
             onSave(draft)
             dismiss()
+          } label: {
+            Label(L10n("保存"), systemImage: "checkmark")
           }
           .fontWeight(.semibold)
         }
@@ -924,7 +980,7 @@ struct PhotoSlimiOSCompressionSettingsSheet: View {
   private var bitrateEditor: some View {
     Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 9) {
       GridRow {
-        Text("分辨率")
+        Text(L10n("分辨率"))
           .font(.caption.weight(.semibold))
         Text("30 fps")
           .font(.caption.weight(.semibold))

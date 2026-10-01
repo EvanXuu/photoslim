@@ -3,6 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "PhotoSlim",
+    defaultLocalization: "en",
     // Desktop and iOS UI targets stay separate, while media capability and
     // automatic compression code are shared from iOS 17/macOS 14 onward.
     platforms: [.macOS(.v14), .iOS(.v17)],
@@ -16,6 +17,7 @@ let package = Package(
         .target(
             name: "PhotoSlimMediaCore",
             path: "Sources/PhotoSlimMediaCore",
+            resources: [.process("Resources")],
             linkerSettings: [
                 .linkedFramework("AVFoundation"),
                 .linkedFramework("ImageIO"),
@@ -44,6 +46,7 @@ let package = Package(
                 .linkedFramework("ImageIO"),
                 .linkedFramework("CoreImage"),
                 .linkedFramework("CoreLocation"),
+                .linkedFramework("CloudKit"),
                 .linkedFramework("AppKit")
             ]
         ),

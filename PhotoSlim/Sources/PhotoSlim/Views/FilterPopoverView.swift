@@ -1,3 +1,6 @@
+#if SWIFT_PACKAGE
+import PhotoSlimMediaCore
+#endif
 import SwiftUI
 
 struct FilterPopoverView: View {
@@ -7,10 +10,10 @@ struct FilterPopoverView: View {
   var body: some View {
     VStack(spacing: 0) {
       HStack {
-        Text("筛选照片图库")
+        Text(L10n("筛选照片图库"))
           .font(.system(size: 15, weight: .semibold))
         Spacer()
-        Button("重置") { model.filter = BrowserFilter() }
+        Button(L10n("重置")) { model.filter = BrowserFilter() }
           .buttonStyle(.link)
       }
       .padding(16)
@@ -18,51 +21,51 @@ struct FilterPopoverView: View {
 
       ScrollView {
         VStack(alignment: .leading, spacing: 16) {
-          Toggle("仅显示收藏", isOn: $model.filter.favoritesOnly)
+          Toggle(L10n("仅显示收藏"), isOn: $model.filter.favoritesOnly)
 
-          filterSection("拍摄时间") {
-            Picker("时间", selection: $model.filter.timeFilter) {
+          filterSection(L10n("拍摄时间")) {
+            Picker(L10n("时间"), selection: $model.filter.timeFilter) {
               ForEach(TimeFilter.allCases) { Text($0.title).tag($0) }
             }
             if model.filter.timeFilter == .customOlderThan {
               HStack {
-                TextField("年数", value: customMinimumAgeYears, format: .number)
+                TextField(L10n("年数"), value: customMinimumAgeYears, format: .number)
                   .textFieldStyle(.roundedBorder)
-                Text("年以上")
+                Text(L10n("年以上"))
                   .foregroundStyle(.secondary)
               }
             } else if model.filter.timeFilter == .custom {
-              DatePicker("开始", selection: customStartDate, displayedComponents: .date)
-              DatePicker("结束", selection: customEndDate, displayedComponents: .date)
+              DatePicker(L10n("开始"), selection: customStartDate, displayedComponents: .date)
+              DatePicker(L10n("结束"), selection: customEndDate, displayedComponents: .date)
             }
           }
 
-          filterSection("原文件大小") {
-            Picker("大小", selection: $model.filter.sizeFilter) {
+          filterSection(L10n("原文件大小")) {
+            Picker(L10n("大小"), selection: $model.filter.sizeFilter) {
               ForEach(SizeFilter.pickerCases) { Text($0.title).tag($0) }
             }
             if model.filter.sizeFilter == .customMinimum {
               HStack {
                 TextField(
-                  "最小 MB", value: minimumMB, format: .number.precision(.fractionLength(0...1)))
-                Text("MB 以上")
+                  L10n("最小 MB"), value: minimumMB, format: .number.precision(.fractionLength(0...1)))
+                Text(L10n("MB 以上"))
                   .foregroundStyle(.secondary)
               }
               .textFieldStyle(.roundedBorder)
             } else if model.filter.sizeFilter == .custom {
               HStack {
                 TextField(
-                  "最小 MB", value: minimumMB, format: .number.precision(.fractionLength(0...1)))
-                Text("至").foregroundStyle(.secondary)
+                  L10n("最小 MB"), value: minimumMB, format: .number.precision(.fractionLength(0...1)))
+                Text(L10n("至")).foregroundStyle(.secondary)
                 TextField(
-                  "最大 MB", value: maximumMB, format: .number.precision(.fractionLength(0...1)))
+                  L10n("最大 MB"), value: maximumMB, format: .number.precision(.fractionLength(0...1)))
               }
               .textFieldStyle(.roundedBorder)
             }
           }
 
-          filterSection("存储位置") {
-            Picker("存储位置", selection: $model.filter.cloudFilter) {
+          filterSection(L10n("存储位置")) {
+            Picker(L10n("存储位置"), selection: $model.filter.cloudFilter) {
               ForEach(CloudFilter.allCases) { Text($0.title).tag($0) }
             }
           }
@@ -71,7 +74,7 @@ struct FilterPopoverView: View {
 
           DisclosureGroup(isExpanded: $exclusionExpanded) {
             VStack(alignment: .leading, spacing: 11) {
-              Text("取消排除会先显示风险提醒；锁定项目即使显示也不能处理。")
+              Text(L10n("取消排除会先显示风险提醒；锁定项目即使显示也不能处理。"))
                 .font(.system(size: 10))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -91,10 +94,10 @@ struct FilterPopoverView: View {
             .padding(.top, 11)
           } label: {
             HStack {
-              Text("排除项")
+              Text(L10n("排除项"))
                 .font(.system(size: 12, weight: .semibold))
               Spacer()
-              Text("默认排除风险项目")
+              Text(L10n("默认排除风险项目"))
                 .font(.system(size: 10))
                 .foregroundStyle(.secondary)
             }
@@ -112,19 +115,19 @@ struct FilterPopoverView: View {
     // set, making the toggle appear impossible to turn off.
     .alert(item: $model.pendingExclusionWarning) { reason in
       Alert(
-        title: Text("显示“\(reason.title)”项目？"),
+        title: Text(L10n("显示“\(reason.title)”项目？")),
         message: Text(
           reason.warning
             + (reason.isHardBlock
-              ? "\n\n这些项目仍然不能加入任务。"
-              : "\n\n显示后，可处理项目可以由你手动加入任务。")
+              ? L10n("\n\n这些项目仍然不能加入任务。")
+              : L10n("\n\n显示后，可处理项目可以由你手动加入任务。"))
         ),
         primaryButton: .default(
-          Text("显示这些项目"),
+          Text(L10n("显示这些项目")),
           action: model.confirmShowingExcludedReason
         ),
         secondaryButton: .cancel(
-          Text("保持排除"),
+          Text(L10n("保持排除")),
           action: model.cancelShowingExcludedReason
         )
       )

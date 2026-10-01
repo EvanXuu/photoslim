@@ -77,22 +77,22 @@ public enum PhotoSlimCoreCompressionError: LocalizedError, Sendable {
     public var errorDescription: String? {
         switch self {
         case .invalidImage:
-            return "无法读取照片。"
+            return L10n("无法读取照片。")
         case .cannotCreateDestination:
-            return "无法创建压缩结果。"
+            return L10n("无法创建压缩结果。")
         case .imageEncodingFailed:
-            return "照片压缩失败。"
+            return L10n("照片压缩失败。")
         case .missingVideoTrack:
-            return "无法读取视频轨道。"
+            return L10n("无法读取视频轨道。")
         case .exportUnavailable:
-            return "当前设备没有可用的 HEVC 导出能力。"
+            return L10n("当前设备没有可用的 HEVC 导出能力。")
         case .exportFailed(let detail):
-            return detail.isEmpty ? "视频压缩失败。" : detail
+            return detail.isEmpty ? L10n("视频压缩失败。") : detail
         case .outputVerification(let detail):
             return detail
         case .insufficientSavings(let actual, let required):
-            if actual < 0 { return "压缩结果比原件更大。" }
-            return "实际节省 \(Int(actual * 100))%，低于设置的 \(Int(required * 100))%。"
+            if actual < 0 { return L10n("压缩结果比原件更大。") }
+            return L10n("实际节省 \(Int(actual * 100))%，低于设置的 \(Int(required * 100))%。")
         }
     }
 }
@@ -150,13 +150,13 @@ public final class PhotoSlimMediaCompressor {
 
         let outputBytes = try fileSize(at: outputURL)
         guard outputBytes > 0 else {
-            throw PhotoSlimCoreCompressionError.outputVerification("压缩结果为空。")
+            throw PhotoSlimCoreCompressionError.outputVerification(L10n("压缩结果为空。"))
         }
         guard let outputSource = CGImageSourceCreateWithURL(outputURL as CFURL, nil),
               CGImageSourceGetCount(outputSource) == 1,
               let outputType = CGImageSourceGetType(outputSource),
               UTType(outputType as String)?.conforms(to: .heic) == true else {
-            throw PhotoSlimCoreCompressionError.outputVerification("输出不是有效的 HEIC 文件。")
+            throw PhotoSlimCoreCompressionError.outputVerification(L10n("输出不是有效的 HEIC 文件。"))
         }
 
         try validateSavings(
@@ -224,7 +224,7 @@ public final class PhotoSlimMediaCompressor {
         if Task.isCancelled { throw CancellationError() }
         guard session.status == .completed else {
             throw PhotoSlimCoreCompressionError.exportFailed(
-                session.error?.localizedDescription ?? "视频导出没有完成。"
+                session.error?.localizedDescription ?? L10n("视频导出没有完成。")
             )
         }
 
@@ -234,7 +234,7 @@ public final class PhotoSlimMediaCompressor {
         )
         let outputBytes = try fileSize(at: outputURL)
         guard outputBytes > 0 else {
-            throw PhotoSlimCoreCompressionError.outputVerification("压缩结果为空。")
+            throw PhotoSlimCoreCompressionError.outputVerification(L10n("压缩结果为空。"))
         }
         let measuredSourceBytes = sourceByteCount ?? sourceFileSize(asset)
         try validateSavings(
@@ -270,11 +270,11 @@ public final class PhotoSlimMediaCompressor {
         let output = AVURLAsset(url: outputURL)
         guard let track = try await output.loadTracks(withMediaType: .video).first,
               let description = try await track.load(.formatDescriptions).first else {
-            throw PhotoSlimCoreCompressionError.outputVerification("输出缺少视频轨道。")
+            throw PhotoSlimCoreCompressionError.outputVerification(L10n("输出缺少视频轨道。"))
         }
         let subtype = CMFormatDescriptionGetMediaSubType(description)
         guard subtype == kCMVideoCodecType_HEVC || subtype == fourCC("hev1") else {
-            throw PhotoSlimCoreCompressionError.outputVerification("输出不是 HEVC。")
+            throw PhotoSlimCoreCompressionError.outputVerification(L10n("输出不是 HEVC。"))
         }
 
         let sourceTrack = try await source.loadTracks(withMediaType: .video).first
@@ -295,7 +295,7 @@ public final class PhotoSlimMediaCompressor {
                 tolerance: 1
             ) else {
                 throw PhotoSlimCoreCompressionError.outputVerification(
-                    "输出像素尺寸与原件不一致。"
+                    L10n("输出像素尺寸与原件不一致。")
                 )
             }
         }
@@ -304,7 +304,7 @@ public final class PhotoSlimMediaCompressor {
         let outputDuration = CMTimeGetSeconds(try await output.load(.duration))
         guard sourceDuration.isFinite, outputDuration.isFinite,
               abs(sourceDuration - outputDuration) <= max(0.15, sourceDuration * 0.001) else {
-            throw PhotoSlimCoreCompressionError.outputVerification("输出时长与原件不一致。")
+            throw PhotoSlimCoreCompressionError.outputVerification(L10n("输出时长与原件不一致。"))
         }
     }
 

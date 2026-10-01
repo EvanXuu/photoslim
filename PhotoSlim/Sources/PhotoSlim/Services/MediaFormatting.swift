@@ -1,3 +1,6 @@
+#if SWIFT_PACKAGE
+import PhotoSlimMediaCore
+#endif
 import Foundation
 
 enum MediaFormatting {
@@ -12,19 +15,19 @@ enum MediaFormatting {
 
   private static let dateFormatter: DateFormatter = {
     let formatter = DateFormatter()
-    formatter.locale = Locale(identifier: "zh_CN")
+    formatter.locale = .autoupdatingCurrent
     formatter.dateStyle = .medium
     formatter.timeStyle = .none
     return formatter
   }()
 
   static func bytes(_ value: Int64?) -> String {
-    guard let value else { return "待检查" }
+    guard let value else { return L10n("待检查") }
     return byteFormatter.string(fromByteCount: value)
   }
 
   static func date(_ value: Date?) -> String {
-    guard let value else { return "日期未知" }
+    guard let value else { return L10n("日期未知") }
     return dateFormatter.string(from: value)
   }
 
@@ -40,7 +43,7 @@ enum MediaFormatting {
   }
 
   static func percentage(_ value: Double?) -> String {
-    guard let value else { return "下载后计算" }
+    guard let value else { return L10n("下载后计算") }
     return "\(Int((value * 100).rounded()))%"
   }
 
